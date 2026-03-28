@@ -1,6 +1,6 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const sodium = require('libsodium-wrappers') as typeof import('libsodium-wrappers');
+const sodium = require('libsodium-wrappers-sumo') as typeof import('libsodium-wrappers');
 import type { Logger } from './logger.js';
 
 /**
@@ -25,11 +25,9 @@ export class CryptoVault {
       return;
     }
 
-    // Derive key from password using Argon2id
-    const salt = sodium.crypto_generichash(
-      sodium.crypto_pwhash_SALTBYTES,
-      'aura-vault-salt-v1',
-    );
+    // Derive a fixed salt from a known string using generichash
+    const saltInput = sodium.from_string('aura-vault-salt-v1');
+    const salt = sodium.crypto_generichash(sodium.crypto_pwhash_SALTBYTES, saltInput);
 
     this.key = sodium.crypto_pwhash(
       sodium.crypto_secretbox_KEYBYTES,
