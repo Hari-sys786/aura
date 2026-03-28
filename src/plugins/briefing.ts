@@ -70,7 +70,7 @@ export class BriefingPlugin implements AuraPlugin {
     const dateFmt = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     const sections: string[] = [
-      `🌅 *Good Morning!*\n${dayName}, ${dateFmt}\n`,
+      `🌅 <b>Good Morning!</b>\n${dayName}, ${dateFmt}\n`,
     ];
 
     // Calendar section
@@ -97,7 +97,7 @@ export class BriefingPlugin implements AuraPlugin {
 
   async generateEveningBriefing(): Promise<string> {
     const sections: string[] = [
-      `🌙 *Evening Summary*\n`,
+      `🌙 <b>Evening Summary</b>\n`,
     ];
 
     // What happened today
@@ -124,7 +124,7 @@ export class BriefingPlugin implements AuraPlugin {
 
   async generateWeeklyBriefing(): Promise<string> {
     const sections: string[] = [
-      `📊 *Weekly Overview*\n`,
+      `📊 <b>Weekly Overview</b>\n`,
     ];
 
     // Week ahead calendar
@@ -166,7 +166,7 @@ export class BriefingPlugin implements AuraPlugin {
       return `  • ${time} — ${val.summary}`;
     });
 
-    return `📅 *Schedule* (${todayEvents.length} events)\n${lines.join('\n')}`;
+    return `📅 <b>Schedule</b> (${todayEvents.length} events)\n${lines.join('\n')}`;
   }
 
   private async getTomorrowPreview(): Promise<string> {
@@ -198,7 +198,7 @@ export class BriefingPlugin implements AuraPlugin {
       return start >= now && start <= weekEnd;
     });
 
-    return `📅 *This week:* ${weekEvents.length} event(s)`;
+    return `📅 <b>This week:</b> ${weekEvents.length} event(s)`;
   }
 
   private getPendingTasks(): string | null {
@@ -216,7 +216,7 @@ export class BriefingPlugin implements AuraPlugin {
     });
 
     const more = pending.length > 5 ? `\n  _...and ${pending.length - 5} more_` : '';
-    return `✅ *Pending Tasks* (${pending.length})\n${lines.join('\n')}${more}`;
+    return `✅ <b>Pending Tasks</b> (${pending.length})\n${lines.join('\n')}${more}`;
   }
 
   private getDueBills(): string | null {
@@ -237,7 +237,7 @@ export class BriefingPlugin implements AuraPlugin {
       return `  • ${val.name}: ₹${val.amount} due ${val.dueDate}`;
     });
 
-    return `💰 *Due Bills*\n${lines.join('\n')}`;
+    return `💰 <b>Due Bills</b>\n${lines.join('\n')}`;
   }
 
   private getCompletedToday(): string | null {
@@ -259,7 +259,7 @@ export class BriefingPlugin implements AuraPlugin {
     });
 
     if (overdue.length === 0) return null;
-    return `⚠️ *Overdue:* ${overdue.length} item(s) need attention`;
+    return `⚠️ <b>Overdue:</b> ${overdue.length} item(s) need attention`;
   }
 
   private getUpcomingDeadlines(): string | null {
@@ -271,6 +271,6 @@ export class BriefingPlugin implements AuraPlugin {
     });
 
     if (upcoming.length === 0) return null;
-    return `⏰ *Upcoming deadlines:* ${upcoming.length} this week`;
+    return `⏰ <b>Upcoming deadlines:</b> ${upcoming.length} this week`;
   }
 }

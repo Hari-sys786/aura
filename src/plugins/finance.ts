@@ -269,14 +269,14 @@ export class FinancePlugin implements AuraPlugin {
       const percentage = (spent / budget.limit) * 100;
 
       if (percentage >= 100) {
-        alerts.push(`🚨 *${budget.category}*: Over budget! ₹${spent.toFixed(0)} / ₹${budget.limit} (${percentage.toFixed(0)}%)`);
+        alerts.push(`🚨 <b>${budget.category}</b>: Over budget! ₹${spent.toFixed(0)} / ₹${budget.limit} (${percentage.toFixed(0)}%)`);
       } else if (percentage >= this.config.alertThreshold) {
-        alerts.push(`⚠️ *${budget.category}*: ₹${spent.toFixed(0)} / ₹${budget.limit} (${percentage.toFixed(0)}%)`);
+        alerts.push(`⚠️ <b>${budget.category}</b>: ₹${spent.toFixed(0)} / ₹${budget.limit} (${percentage.toFixed(0)}%)`);
       }
     }
 
     if (alerts.length > 0) {
-      await this.ctx.notify(`💰 *Budget Alert*\n\n${alerts.join('\n')}`);
+      await this.ctx.notify(`💰 <b>Budget Alert</b>\n\n${alerts.join('\n')}`);
     }
   }
 
@@ -374,7 +374,7 @@ export class FinancePlugin implements AuraPlugin {
       `  • ${tx.merchant}: ₹${tx.amount.toFixed(0)} (${tx.category})`
     );
 
-    return `💰 *Today's Spending*\n\nTotal: ₹${total.toFixed(0)}\n\n${lines.join('\n')}`;
+    return `💰 <b>Today's Spending</b>\n\nTotal: ₹${total.toFixed(0)}\n\n${lines.join('\n')}`;
   }
 
   getWeeklySummary(): string | null {
@@ -398,7 +398,7 @@ export class FinancePlugin implements AuraPlugin {
       .slice(0, 8)
       .map(([cat, amount]) => `  • ${cat}: ₹${amount.toFixed(0)}`);
 
-    return `📊 *Weekly Spending*\n\nTotal: ₹${total.toFixed(0)} (${txs.length} transactions)\n\n${categoryLines.join('\n')}`;
+    return `📊 <b>Weekly Spending</b>\n\nTotal: ₹${total.toFixed(0)} (${txs.length} transactions)\n\n${categoryLines.join('\n')}`;
   }
 
   getMonthlySummary(): string | null {
@@ -434,16 +434,16 @@ export class FinancePlugin implements AuraPlugin {
     const subTotal = subs.reduce((sum, s) => sum + normalizeToMonthly(s.amount, s.frequency), 0);
 
     const sections = [
-      `📊 *Monthly Summary*\n`,
+      `📊 <b>Monthly Summary</b>\n`,
       `💰 Income: ₹${totalIncome.toFixed(0)}`,
       `💸 Spent: ₹${totalSpent.toFixed(0)}`,
       `📈 Net: ₹${(totalIncome - totalSpent).toFixed(0)}\n`,
-      `🏪 *Top Merchants*`,
+      `🏪 <b>Top Merchants</b>`,
       topMerchants.join('\n'),
     ];
 
     if (subs.length > 0) {
-      sections.push(`\n🔄 *Subscriptions:* ${subs.length} active (₹${subTotal.toFixed(0)}/month)`);
+      sections.push(`\n🔄 <b>Subscriptions:</b> ${subs.length} active (₹${subTotal.toFixed(0)}/month)`);
     }
 
     return sections.join('\n');

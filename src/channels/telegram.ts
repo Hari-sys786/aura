@@ -145,18 +145,21 @@ export class TelegramChannel {
     switch (command) {
       case '/start':
         await this.sendMessage(chatId,
-          `🔱 *Aura v0.2*\n\nHey ${from.first_name}! I'm your personal AI life manager.\n\n` +
+          `🔱 <b>Aura v0.3</b>\n\nHey ${from.first_name}! I'm your personal AI life manager.\n\n` +
           `Send me any message and I'll help. Here's what I can do:\n\n` +
-          `*General*\n` +
+          `<b>General</b>\n` +
           `/status — System status\n` +
           `/plugins — Active plugins\n` +
           `/clear — Clear conversation\n` +
           `/help — Show this message\n\n` +
-          `*Finance*\n` +
+          `<b>Finance</b>\n` +
           `/spend — Today's spending\n` +
           `/budget — Budget status\n` +
-          `/summary — Monthly summary`,
-          { parse_mode: 'Markdown' }
+          `/summary — Monthly summary\n\n` +
+          `<b>Documents &amp; Subscriptions</b>\n` +
+          `/docs — Document vault\n` +
+          `/subs — Subscription tracker`,
+          { parse_mode: 'HTML' }
         );
         break;
 
@@ -168,11 +171,11 @@ export class TelegramChannel {
         const memMB = (mem.heapUsed / 1024 / 1024).toFixed(1);
 
         await this.sendMessage(chatId,
-          `📊 *Aura Status*\n\n` +
+          `📊 <b>Aura Status</b>\n\n` +
           `⏱ Uptime: ${hours}h ${mins}m\n` +
           `💾 Memory: ${memMB} MB\n` +
           `🔌 Channel: Telegram`,
-          { parse_mode: 'Markdown' }
+          { parse_mode: 'HTML' }
         );
         break;
       }
@@ -183,7 +186,7 @@ export class TelegramChannel {
           await this.sendMessage(chatId, '🔌 No plugins active.\n\nPlugins will be available in v0.2+ (Email, Finance, Calendar, etc.)');
         } else {
           const lines = pluginList.map(p => `  • ${p.name} v${p.version} (${p.state})`);
-          await this.sendMessage(chatId, `🔌 *Plugins*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+          await this.sendMessage(chatId, `🔌 <b>Plugins</b>\n\n${lines.join('\n')}`, { parse_mode: 'HTML' });
         }
         break;
       }
@@ -197,7 +200,7 @@ export class TelegramChannel {
         const fp = this.getFinancePlugin();
         if (!fp) { await this.sendMessage(chatId, '💰 Finance plugin not active.'); break; }
         const daily = fp.getDailySummary();
-        await this.sendMessage(chatId, daily ?? '💰 No spending recorded today.', { parse_mode: 'Markdown' });
+        await this.sendMessage(chatId, daily ?? '💰 No spending recorded today.', { parse_mode: 'HTML' });
         break;
       }
 
@@ -213,24 +216,49 @@ export class TelegramChannel {
         const fp = this.getFinancePlugin();
         if (!fp) { await this.sendMessage(chatId, '💰 Finance plugin not active.'); break; }
         const monthly = fp.getMonthlySummary();
-        await this.sendMessage(chatId, monthly ?? '📊 No transactions this month.', { parse_mode: 'Markdown' });
+        await this.sendMessage(chatId, monthly ?? '📊 No transactions this month.', { parse_mode: 'HTML' });
+        break;
+      }
+
+      case '/docs': {
+        const docPlugin = this.agent.getPluginInstance('documents');
+        if (!docPlugin || typeof (docPlugin as Record<string, unknown>).getSummary !== 'function') {
+          await this.sendMessage(chatId, '📄 Document vault not active.');
+          break;
+        }
+        const summary = (docPlugin as { getSummary(): string }).getSummary();
+        await this.sendMessage(chatId, summary, { parse_mode: 'HTML' });
+        break;
+      }
+
+      case '/subs': {
+        const subPlugin = this.agent.getPluginInstance('subscriptions');
+        if (!subPlugin || typeof (subPlugin as Record<string, unknown>).getMonthlyCostSummary !== 'function') {
+          await this.sendMessage(chatId, '🔔 Subscription watchdog not active.');
+          break;
+        }
+        const subSummary = (subPlugin as { getMonthlyCostSummary(): string }).getMonthlyCostSummary();
+        await this.sendMessage(chatId, subSummary, { parse_mode: 'HTML' });
         break;
       }
 
       case '/help':
         await this.sendMessage(chatId,
-          `🔱 *Aura Commands*\n\n` +
-          `*General*\n` +
+          `🔱 <b>Aura Commands</b>\n\n` +
+          `<b>General</b>\n` +
           `/status — System status\n` +
           `/plugins — Active plugins\n` +
           `/clear — Clear conversation\n` +
           `/help — This message\n\n` +
-          `*Finance*\n` +
+          `<b>Finance</b>\n` +
           `/spend — Today's spending\n` +
           `/budget — Budget check\n` +
           `/summary — Monthly summary\n\n` +
+          `<b>Documents &amp; Subscriptions</b>\n` +
+          `/docs — Document vault summary\n` +
+          `/subs — Subscription costs\n\n` +
           `Or just send any message — I'm here to help manage your life.`,
-          { parse_mode: 'Markdown' }
+          { parse_mode: 'HTML' }
         );
         break;
 
@@ -240,6 +268,12 @@ export class TelegramChannel {
   }
 
   async sendMessage(chatId: number, text: string, extra: Record<string, unknown> = {}): Promise<void> {
+    // Convert Markdown to Telegram HTML for AI responses (no parse_mode set)
+    if (!extra.parse_mode) {
+      text = this.markdownToTelegramHtml(text);
+      extra.parse_mode = 'HTML';
+    }
+
     // Telegram max message length is 4096
     if (text.length > 4096) {
       const chunks = this.chunkText(text, 4096);
@@ -249,7 +283,49 @@ export class TelegramChannel {
       return;
     }
 
-    await this.apiCall('sendMessage', { chat_id: chatId, text, ...extra });
+    const result = await this.apiCall('sendMessage', { chat_id: chatId, text, ...extra });
+    // If HTML parse fails, retry without formatting
+    if (!result.ok && extra.parse_mode) {
+      const plain = text.replace(/<[^>]+>/g, '');
+      await this.apiCall('sendMessage', { chat_id: chatId, text: plain });
+    }
+  }
+
+  private markdownToTelegramHtml(text: string): string {
+    // Escape HTML entities first
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Bold: **text** or __text__
+    html = html.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    html = html.replace(/__(.+?)__/g, '<b>$1</b>');
+
+    // Italic: *text* or _text_ (but not inside words like don_t)
+    html = html.replace(/(?<!\w)\*([^*]+?)\*(?!\w)/g, '<i>$1</i>');
+    html = html.replace(/(?<!\w)_([^_]+?)_(?!\w)/g, '<i>$1</i>');
+
+    // Code blocks: ```text```
+    html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre>$2</pre>');
+    html = html.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+
+    // Inline code: `text`
+    html = html.replace(/`([^`]+?)`/g, '<code>$1</code>');
+
+    // Strikethrough: ~~text~~
+    html = html.replace(/~~(.+?)~~/g, '<s>$1</s>');
+
+    // Links: [text](url)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+    // Headers: # text → bold
+    html = html.replace(/^#{1,6}\s+(.+)$/gm, '<b>$1</b>');
+
+    // Bullet points: clean up
+    html = html.replace(/^[-•]\s+/gm, '• ');
+
+    return html;
   }
 
   async sendNotification(chatId: number, message: string, urgency: string = 'normal'): Promise<void> {

@@ -450,7 +450,7 @@ export class EmailPlugin implements AuraPlugin {
       byCategory.set(email.category, list);
     }
 
-    const sections: string[] = ['📧 *Email Summary*\n'];
+    const sections: string[] = ['📧 <b>Email Summary</b>\n'];
 
     const categoryEmoji: Record<EmailCategory, string> = {
       bill: '💰', action_required: '⚡', personal: '👤',

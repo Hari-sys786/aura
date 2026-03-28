@@ -11,6 +11,8 @@ import { EmailPlugin } from './plugins/email.js';
 import { FinancePlugin } from './plugins/finance.js';
 import { CalendarPlugin } from './plugins/calendar.js';
 import { BriefingPlugin } from './plugins/briefing.js';
+import { DocumentPlugin } from './plugins/documents.js';
+import { SubscriptionPlugin } from './plugins/subscriptions.js';
 
 async function main(): Promise<void> {
   console.log(`
@@ -80,6 +82,16 @@ async function main(): Promise<void> {
   } else {
     log.info('Google OAuth not configured — Calendar & Email plugins skipped');
   }
+
+  // Document vault
+  const docPlugin = new DocumentPlugin();
+  await plugins.register(docPlugin, { vaultPath: config.storage.dataDir + '/vault' });
+  await plugins.activate('documents');
+
+  // Subscription watchdog
+  const subPlugin = new SubscriptionPlugin();
+  await plugins.register(subPlugin);
+  await plugins.activate('subscriptions');
 
   log.info('Plugin bus ready');
 

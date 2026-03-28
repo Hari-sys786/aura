@@ -197,6 +197,44 @@ Be concise. Answer with actual data, not instructions.`;
       }
     }
 
+    // Document intent
+    const docKeywords = ['document', 'vault', 'file', 'pdf', 'passport', 'license', 'certificate', 'insurance', 'medical', 'receipt'];
+    if (docKeywords.some(k => msg.includes(k))) {
+      try {
+        const docs = this.storage.sqlite.list('documents');
+        if (docs.length > 0) {
+          const list = docs.slice(0, 10).map(d => {
+            const val = JSON.parse(d.value);
+            return `- [${val.category}] ${val.originalName} (${val.tags?.join(', ') ?? ''})`;
+          });
+          parts.push(`Documents (${docs.length} total):\n${list.join('\n')}`);
+        } else {
+          parts.push('No documents in vault yet. Send files to store them.');
+        }
+      } catch (err) {
+        this.log.error(`Failed to fetch document data: ${err}`);
+      }
+    }
+
+    // Subscription intent
+    const subKeywords = ['subscription', 'subscribe', 'renewal', 'renew', 'netflix', 'spotify', 'prime', 'monthly cost'];
+    if (subKeywords.some(k => msg.includes(k))) {
+      try {
+        const subs = this.storage.sqlite.list('subscriptions');
+        if (subs.length > 0) {
+          const list = subs.map(s => {
+            const val = JSON.parse(s.value);
+            return `- ${val.name}: ${val.currency} ${val.amount}/${val.frequency} (${val.status})`;
+          });
+          parts.push(`Subscriptions (${subs.length}):\n${list.join('\n')}`);
+        } else {
+          parts.push('No subscriptions tracked yet.');
+        }
+      } catch (err) {
+        this.log.error(`Failed to fetch subscription data: ${err}`);
+      }
+    }
+
     return parts.length > 0 ? parts.join('\n\n') : null;
   }
 
