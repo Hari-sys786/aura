@@ -33,6 +33,8 @@ export class TelegramChannel {
   private polling = false;
   private offset = 0;
   private allowedUsers: Set<number> = new Set();
+  private inFlight = 0;
+  private readonly maxConcurrent = 5;
 
   constructor(token: string, agent: Agent, logger: Logger, allowedUserIds?: number[]) {
     this.token = token;
@@ -76,7 +78,15 @@ export class TelegramChannel {
         if (response.ok && Array.isArray(response.result)) {
           for (const update of response.result as TelegramUpdate[]) {
             this.offset = update.update_id + 1;
-            await this.handleUpdate(update);
+            // Process without blocking the poll loop (bounded concurrency)
+            if (this.inFlight < this.maxConcurrent) {
+              this.inFlight++;
+              this.handleUpdate(update).catch(err => {
+                this.log.error(`Update handling error: ${err}`);
+              }).finally(() => { this.inFlight--; });
+            } else {
+              this.log.warn('Too many concurrent updates, dropping message');
+            }
           }
         }
       } catch (err) {
@@ -135,12 +145,17 @@ export class TelegramChannel {
     switch (command) {
       case '/start':
         await this.sendMessage(chatId,
-          `🔱 *Aura v0.1*\n\nHey ${from.first_name}! I'm your personal AI life manager.\n\n` +
+          `🔱 *Aura v0.2*\n\nHey ${from.first_name}! I'm your personal AI life manager.\n\n` +
           `Send me any message and I'll help. Here's what I can do:\n\n` +
+          `*General*\n` +
           `/status — System status\n` +
           `/plugins — Active plugins\n` +
           `/clear — Clear conversation\n` +
-          `/help — Show this message`,
+          `/help — Show this message\n\n` +
+          `*Finance*\n` +
+          `/spend — Today's spending\n` +
+          `/budget — Budget status\n` +
+          `/summary — Monthly summary`,
           { parse_mode: 'Markdown' }
         );
         break;
@@ -162,18 +177,58 @@ export class TelegramChannel {
         break;
       }
 
+      case '/plugins': {
+        const pluginList = this.agent.getPlugins();
+        if (pluginList.length === 0) {
+          await this.sendMessage(chatId, '🔌 No plugins active.\n\nPlugins will be available in v0.2+ (Email, Finance, Calendar, etc.)');
+        } else {
+          const lines = pluginList.map(p => `  • ${p.name} v${p.version} (${p.state})`);
+          await this.sendMessage(chatId, `🔌 *Plugins*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+        }
+        break;
+      }
+
       case '/clear':
         this.agent.clearHistory();
         await this.sendMessage(chatId, '🧹 Conversation cleared.');
         break;
 
+      case '/spend': {
+        const fp = this.getFinancePlugin();
+        if (!fp) { await this.sendMessage(chatId, '💰 Finance plugin not active.'); break; }
+        const daily = fp.getDailySummary();
+        await this.sendMessage(chatId, daily ?? '💰 No spending recorded today.', { parse_mode: 'Markdown' });
+        break;
+      }
+
+      case '/budget': {
+        const fp = this.getFinancePlugin();
+        if (!fp) { await this.sendMessage(chatId, '💰 Finance plugin not active.'); break; }
+        await fp.checkBudgets();
+        await this.sendMessage(chatId, '✅ Budget check complete.');
+        break;
+      }
+
+      case '/summary': {
+        const fp = this.getFinancePlugin();
+        if (!fp) { await this.sendMessage(chatId, '💰 Finance plugin not active.'); break; }
+        const monthly = fp.getMonthlySummary();
+        await this.sendMessage(chatId, monthly ?? '📊 No transactions this month.', { parse_mode: 'Markdown' });
+        break;
+      }
+
       case '/help':
         await this.sendMessage(chatId,
           `🔱 *Aura Commands*\n\n` +
+          `*General*\n` +
           `/status — System status\n` +
           `/plugins — Active plugins\n` +
           `/clear — Clear conversation\n` +
           `/help — This message\n\n` +
+          `*Finance*\n` +
+          `/spend — Today's spending\n` +
+          `/budget — Budget check\n` +
+          `/summary — Monthly summary\n\n` +
           `Or just send any message — I'm here to help manage your life.`,
           { parse_mode: 'Markdown' }
         );
@@ -233,5 +288,11 @@ export class TelegramChannel {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private getFinancePlugin(): { getDailySummary(): string | null; getMonthlySummary(): string | null; checkBudgets(): Promise<void> } | null {
+    const plugin = this.agent.getPluginInstance('finance');
+    if (!plugin || typeof (plugin as Record<string, unknown>).getDailySummary !== 'function') return null;
+    return plugin as { getDailySummary(): string | null; getMonthlySummary(): string | null; checkBudgets(): Promise<void> };
   }
 }

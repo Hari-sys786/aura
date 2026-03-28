@@ -7,6 +7,10 @@ import { Scheduler } from './core/scheduler.js';
 import { CryptoVault } from './core/crypto.js';
 import { Agent } from './core/agent.js';
 import { TelegramChannel } from './channels/telegram.js';
+import { EmailPlugin } from './plugins/email.js';
+import { FinancePlugin } from './plugins/finance.js';
+import { CalendarPlugin } from './plugins/calendar.js';
+import { BriefingPlugin } from './plugins/briefing.js';
 
 async function main(): Promise<void> {
   console.log(`
@@ -42,6 +46,38 @@ async function main(): Promise<void> {
   plugins.setScheduleHandler((cronExpr, handler) => {
     return scheduler.add(cronExpr, handler);
   });
+
+  // Register built-in plugins
+  const financePlugin = new FinancePlugin();
+  await plugins.register(financePlugin, config as unknown as Record<string, unknown>);
+  await plugins.activate('finance');
+
+  const briefingPlugin = new BriefingPlugin();
+  await plugins.register(briefingPlugin, config as unknown as Record<string, unknown>);
+  await plugins.activate('briefing');
+
+  // Email and Calendar require OAuth config — register but only activate if configured
+  if (config.google.clientId && config.google.clientSecret) {
+    const calendarPlugin = new CalendarPlugin();
+    await plugins.register(calendarPlugin, {
+      clientId: config.google.clientId,
+      clientSecret: config.google.clientSecret,
+      redirectUri: config.google.redirectUri,
+    });
+    await plugins.activate('calendar');
+
+    const emailPlugin = new EmailPlugin();
+    await plugins.register(emailPlugin, {
+      provider: 'gmail',
+      gmail: {
+        clientId: config.google.clientId,
+        clientSecret: config.google.clientSecret,
+      },
+    });
+    await plugins.activate('email');
+  } else {
+    log.info('Google OAuth not configured — Calendar & Email plugins skipped');
+  }
 
   log.info('Plugin bus ready');
 

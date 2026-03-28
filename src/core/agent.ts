@@ -139,6 +139,14 @@ Be concise. Prioritize actionable responses. Don't over-explain.`;
     return reasonableEvents.some(e => event.startsWith(e));
   }
 
+  getPlugins(): Array<{ name: string; version: string; state: string }> {
+    return this.plugins.listPlugins();
+  }
+
+  getPluginInstance(name: string): unknown {
+    return this.plugins.getPlugin(name);
+  }
+
   clearHistory(): void {
     this.conversationHistory = [];
   }
