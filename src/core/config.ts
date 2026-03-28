@@ -55,11 +55,15 @@ function loadYamlConfig(configPath: string): Record<string, unknown> {
   }
 }
 
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function get(yaml: Record<string, unknown>, path: string): string | undefined {
   const parts = path.split('.');
   let current: unknown = yaml;
   for (const part of parts) {
+    if (DANGEROUS_KEYS.has(part)) return undefined;
     if (current === null || current === undefined || typeof current !== 'object') return undefined;
+    if (!Object.prototype.hasOwnProperty.call(current, part)) return undefined;
     current = (current as Record<string, unknown>)[part];
   }
   return current !== undefined && current !== null ? String(current) : undefined;
