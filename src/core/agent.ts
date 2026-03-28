@@ -32,11 +32,19 @@ export class Agent {
     this.scheduler = ctx.scheduler;
     this.log = ctx.logger;
 
-    this.systemPrompt = `You are Aura, a personal AI life management assistant. You help manage emails, calendar, finances, documents, and daily routines. You are direct, helpful, and proactive. You run locally on the user's device and respect their privacy completely.
+    this.systemPrompt = `You are Aura, a personal AI life management assistant. You are direct, concise, and proactive.
 
-Available capabilities depend on active plugins. When asked about something you can't do yet, explain what plugin is needed.
+When the user asks about emails, calendar, finances, or briefings — you have REAL access to their data through plugins.
 
-Be concise. Prioritize actionable responses. Don't over-explain.`;
+IMPORTANT: You will receive plugin data in your context when relevant. Use it to answer directly. Never say "I can't access" — if a plugin is active, you CAN access the data.
+
+Commands you support:
+- Email: list emails, show bills, show newsletters, check unread
+- Calendar: show today's schedule, upcoming events, conflicts
+- Finance: show spending, set budget, monthly summary
+- Briefing: morning/evening/weekly summary
+
+Be concise. Answer with actual data, not instructions.`;
   }
 
   /**
@@ -45,8 +53,15 @@ Be concise. Prioritize actionable responses. Don't over-explain.`;
   async processMessage(userMessage: string, context?: Record<string, unknown>): Promise<string> {
     this.log.info(`Processing message: "${userMessage.slice(0, 100)}${userMessage.length > 100 ? '...' : ''}"`);
 
-    // Add user message to history
-    this.conversationHistory.push({ role: 'user', content: userMessage });
+    // Detect intent and fetch relevant plugin data
+    const pluginData = await this.fetchPluginData(userMessage);
+
+    // Add user message to history (with plugin data appended if available)
+    const enrichedMessage = pluginData
+      ? `${userMessage}\n\n[Plugin Data]\n${pluginData}`
+      : userMessage;
+
+    this.conversationHistory.push({ role: 'user', content: enrichedMessage });
 
     // Trim history if too long
     if (this.conversationHistory.length > this.maxHistory) {
@@ -108,6 +123,81 @@ Be concise. Prioritize actionable responses. Don't over-explain.`;
     }
 
     return null;
+  }
+
+  /**
+   * Detect user intent and fetch relevant data from plugins.
+   */
+  private async fetchPluginData(message: string): Promise<string | null> {
+    const msg = message.toLowerCase();
+    const parts: string[] = [];
+
+    // Email intent
+    const emailKeywords = ['email', 'mail', 'inbox', 'unread', 'newsletter', 'junk', 'spam', 'bill', 'invoice'];
+    if (emailKeywords.some(k => msg.includes(k))) {
+      try {
+        const emailPlugin = this.plugins.getPlugin('email');
+        if (emailPlugin) {
+          const emails = this.storage.sqlite.list('emails');
+          if (emails.length > 0) {
+            const classified = emails.slice(0, 20).map(e => {
+              const val = JSON.parse(e.value);
+              return `- [${val.category}] From: ${val.fromName} | Subject: ${val.subject} | Date: ${val.date?.slice(0, 10) ?? 'unknown'}`;
+            });
+            parts.push(`Recent Emails (${emails.length} total):\n${classified.join('\n')}`);
+          } else {
+            parts.push('No emails fetched yet. Email sync runs every 5 minutes.');
+          }
+        }
+      } catch (err) {
+        this.log.error(`Failed to fetch email data: ${err}`);
+      }
+    }
+
+    // Calendar intent
+    const calendarKeywords = ['calendar', 'schedule', 'meeting', 'event', 'appointment', 'today', 'tomorrow', 'week'];
+    if (calendarKeywords.some(k => msg.includes(k))) {
+      try {
+        const events = this.storage.sqlite.list('calendar-events');
+        if (events.length > 0) {
+          const upcoming = events.slice(0, 10).map(e => {
+            const val = JSON.parse(e.value);
+            const time = val.allDay ? 'All day' : val.start?.slice(11, 16) ?? '';
+            return `- ${time} | ${val.summary}${val.location ? ` (${val.location})` : ''}`;
+          });
+          parts.push(`Calendar Events:\n${upcoming.join('\n')}`);
+        } else {
+          parts.push('No calendar events synced yet. Calendar sync runs every 5 minutes.');
+        }
+      } catch (err) {
+        this.log.error(`Failed to fetch calendar data: ${err}`);
+      }
+    }
+
+    // Finance intent
+    const financeKeywords = ['spend', 'spending', 'expense', 'money', 'budget', 'finance', 'transaction', 'cost'];
+    if (financeKeywords.some(k => msg.includes(k))) {
+      try {
+        const transactions = this.storage.sqlite.list('transactions');
+        if (transactions.length > 0) {
+          const recent = transactions.slice(0, 10).map(t => {
+            const val = JSON.parse(t.value);
+            return `- ${val.type} ₹${val.amount} | ${val.merchant} (${val.category}) | ${val.date?.slice(0, 10) ?? ''}`;
+          });
+          const totalSpent = transactions
+            .map(t => JSON.parse(t.value))
+            .filter((v: { type: string }) => v.type === 'debit')
+            .reduce((sum: number, v: { amount: number }) => sum + v.amount, 0);
+          parts.push(`Finance (${transactions.length} transactions, Total spent: ₹${totalSpent}):\n${recent.join('\n')}`);
+        } else {
+          parts.push('No transactions recorded yet.');
+        }
+      } catch (err) {
+        this.log.error(`Failed to fetch finance data: ${err}`);
+      }
+    }
+
+    return parts.length > 0 ? parts.join('\n\n') : null;
   }
 
   private buildSystemPrompt(context?: Record<string, unknown>): string {

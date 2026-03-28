@@ -29,6 +29,7 @@ export interface GoogleConfig {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  refreshToken: string;
 }
 
 export interface AuraConfig {
@@ -96,6 +97,7 @@ export function loadConfig(): AuraConfig {
       clientId: get(yaml, 'google.clientId') ?? env('GOOGLE_CLIENT_ID'),
       clientSecret: get(yaml, 'google.clientSecret') ?? env('GOOGLE_CLIENT_SECRET'),
       redirectUri: get(yaml, 'google.redirectUri') ?? env('GOOGLE_REDIRECT_URI', 'http://localhost:3000/auth/google/callback'),
+      refreshToken: get(yaml, 'google.refreshToken') ?? env('GOOGLE_REFRESH_TOKEN'),
     },
     masterPassword: get(yaml, 'masterPassword') ?? env('MASTER_PASSWORD'),
     plugins: [],

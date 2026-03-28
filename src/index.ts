@@ -57,12 +57,13 @@ async function main(): Promise<void> {
   await plugins.activate('briefing');
 
   // Email and Calendar require OAuth config — register but only activate if configured
-  if (config.google.clientId && config.google.clientSecret) {
+  if (config.google.clientId && config.google.clientSecret && config.google.refreshToken) {
     const calendarPlugin = new CalendarPlugin();
     await plugins.register(calendarPlugin, {
       clientId: config.google.clientId,
       clientSecret: config.google.clientSecret,
       redirectUri: config.google.redirectUri,
+      refreshToken: config.google.refreshToken,
     });
     await plugins.activate('calendar');
 
@@ -72,6 +73,7 @@ async function main(): Promise<void> {
       gmail: {
         clientId: config.google.clientId,
         clientSecret: config.google.clientSecret,
+        refreshToken: config.google.refreshToken,
       },
     });
     await plugins.activate('email');

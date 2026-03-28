@@ -268,16 +268,29 @@ export class EmailPlugin implements AuraPlugin {
     const body = email.bodyPlain.toLowerCase().slice(0, 2000);
     const combined = `${subject} ${body}`;
 
-    // Bill detection
-    const billKeywords = ['invoice', 'bill', 'payment due', 'amount due', 'statement', 'electricity', 'water bill', 'gas bill', 'rent', 'emi', 'premium'];
+    // Bill detection — strict: must have financial keywords AND amount/due indicators
+    const billKeywords = ['invoice', 'bill', 'payment due', 'amount due', 'statement', 'electricity', 'water bill', 'gas bill', 'rent due', 'emi due', 'premium due', 'your bill', 'pay now', 'due date', 'overdue'];
+    const hasAmount = /(?:₹|rs\.?\s*|inr\s*|\$|€)\s*[\d,]+/.test(combined);
+    const hasDueDate = /(?:due|pay by|before|deadline)\s+\d/.test(combined);
     const billScore = billKeywords.filter(k => combined.includes(k)).length;
-    if (billScore >= 2) return { category: 'bill', confidence: 0.9 };
-    if (billScore >= 1 && /₹|rs\.?|inr|\$|usd/.test(combined)) return { category: 'bill', confidence: 0.8 };
+    
+    // Exclude known non-bill senders
+    const nonBillSenders = ['linkedin', 'myntra', 'flipkart', 'amazon', 'swiggy', 'zomato', 'youtube', 'twitter', 'facebook', 'instagram', 'quora', 'medium', 'substack'];
+    const isNonBillSender = nonBillSenders.some(s => from.includes(s));
+    
+    if (!isNonBillSender && billScore >= 2) return { category: 'bill', confidence: 0.9 };
+    if (!isNonBillSender && billScore >= 1 && (hasAmount || hasDueDate)) return { category: 'bill', confidence: 0.8 };
 
-    // Newsletter detection
-    const newsletterKeywords = ['unsubscribe', 'view in browser', 'email preferences', 'opt out', 'mailing list'];
+    // Newsletter / promo detection
+    const newsletterKeywords = ['unsubscribe', 'view in browser', 'email preferences', 'opt out', 'mailing list', 'manage preferences', 'update preferences'];
+    const promoKeywords = ['off', 'sale', 'deal', 'offer', 'discount', 'coupon', 'shop now', 'buy now', 'limited time', 'exclusive', 'new arrival', 'check out'];
+    const promoSenders = ['myntra', 'flipkart', 'amazon', 'swiggy', 'zomato', 'ajio', 'nykaa', 'meesho', 'linkedin', 'quora'];
+    
     if (newsletterKeywords.filter(k => combined.includes(k)).length >= 2) {
       return { category: 'newsletter', confidence: 0.85 };
+    }
+    if (promoSenders.some(s => from.includes(s)) && (newsletterKeywords.some(k => combined.includes(k)) || promoKeywords.some(k => combined.includes(k)))) {
+      return { category: 'newsletter', confidence: 0.8 };
     }
 
     // Action required
