@@ -150,6 +150,24 @@ async function main() {
     assert(data.currency === 'USD', `currency should be USD, got ${data.currency}`);
   });
 
+  await test('email: extract bill with euro (European format)', async () => {
+    const euroBill: ParsedEmail = {
+      id: 'e7', messageId: '<euro@test>', from: 'billing@service.de',
+      fromName: 'German Service', to: 'user@gmail.com',
+      subject: 'Your monthly invoice - payment due',
+      body: 'Your invoice for March. Amount due: €1.234,56. Payment due by 10 April.',
+      bodyPlain: 'Your invoice for March. Amount due: €1.234,56. Payment due by 10 April.',
+      date: '2026-03-28T10:00:00Z', labels: ['INBOX'],
+      isRead: false, hasAttachments: false,
+    };
+
+    const classified = await emailPlugin.classifyEmail(euroBill);
+    assert(classified.category === 'bill', `should be bill, got ${classified.category}`);
+    const data = classified.extractedData as { amount: number; currency: string };
+    assert(data.amount === 1234.56, `amount should be 1234.56, got ${data.amount}`);
+    assert(data.currency === 'EUR', `currency should be EUR, got ${data.currency}`);
+  });
+
   await test('email: summary generation', async () => {
     const emails = [
       await emailPlugin.classifyEmail({
@@ -286,9 +304,8 @@ async function main() {
       // Use parseBankSms to test categorization indirectly
       const sms = `Rs.100 debited at ${merchant}. Ref: 123.`;
       const tx = financePlugin.parseBankSms(sms, 'Bank');
-      if (tx) {
-        assert(tx.category === expected, `${merchant} should be ${expected}, got ${tx.category}`);
-      }
+      assert(tx !== null, `SMS for "${merchant}" should parse successfully`);
+      assert(tx!.category === expected, `${merchant} should be ${expected}, got ${tx!.category}`);
     }
   });
 
@@ -305,12 +322,12 @@ async function main() {
       });
     }
 
-    // Budget check should not crash
+    // Budget check should not crash and should NOT alert (55% < 80% threshold)
     let notified = false;
     plugins.setNotifyHandler(async () => { notified = true; });
     await financePlugin.checkBudgets();
-    // With 250 + 5*500 = 2750 spent on food, budget is 5000, so 55% — no alert at 80% threshold
-    // But at least it shouldn't crash
+    // With 250 + 5*500 = 2750 spent on food, budget is 5000, so 55% — below 80% threshold
+    assert(notified === false, 'should not alert at 55% of budget (threshold is 80%)');
   });
 
   await test('finance: daily summary', () => {

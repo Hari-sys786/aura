@@ -73,6 +73,7 @@ export class EmailPlugin implements AuraPlugin {
   private config!: EmailConfig;
   private gmailAccessToken: string | null = null;
   private gmailTokenExpiry = 0;
+  private scheduleHandle: string | null = null;
 
   async onLoad(ctx: PluginContext): Promise<void> {
     this.ctx = ctx;
@@ -91,7 +92,7 @@ export class EmailPlugin implements AuraPlugin {
   async onActivate(): Promise<void> {
     // Schedule periodic email check
     const cronInterval = Math.max(Math.floor(this.config.pollIntervalMs / 60000), 1);
-    this.ctx.schedule(`*/${cronInterval} * * * *`, async () => {
+    this.scheduleHandle = this.ctx.schedule(`*/${cronInterval} * * * *`, async () => {
       await this.checkNewEmails();
     });
 
@@ -99,6 +100,8 @@ export class EmailPlugin implements AuraPlugin {
   }
 
   async onDeactivate(): Promise<void> {
+    // Schedule handle cleanup is managed by the scheduler on plugin unload
+    this.scheduleHandle = null;
     this.ctx.logger.info('Email plugin deactivated');
   }
 
@@ -217,9 +220,22 @@ export class EmailPlugin implements AuraPlugin {
       date: new Date(parseInt(data.internalDate)).toISOString(),
       labels: data.labelIds ?? [],
       isRead: !(data.labelIds ?? []).includes('UNREAD'),
-      hasAttachments: (data.payload.parts?.length ?? 0) > 1,
+      hasAttachments: this.detectAttachments(data.payload),
       threadId: data.threadId,
     };
+  }
+
+  private detectAttachments(payload: { parts?: Array<{ filename?: string; mimeType?: string; headers?: Array<{ name: string; value: string }>; parts?: unknown[] }> }): boolean {
+    if (!payload.parts) return false;
+    for (const part of payload.parts) {
+      if (part.filename && part.filename.length > 0) return true;
+      if (part.headers) {
+        const disposition = part.headers.find(h => h.name.toLowerCase() === 'content-disposition');
+        if (disposition && disposition.value.toLowerCase().includes('attachment')) return true;
+      }
+      if (part.parts && this.detectAttachments(part as typeof payload)) return true;
+    }
+    return false;
   }
 
   // --- Classification ---
@@ -286,12 +302,32 @@ export class EmailPlugin implements AuraPlugin {
   private extractBillData(email: ParsedEmail): BillData {
     const text = `${email.subject} ${email.bodyPlain}`;
 
-    // Amount extraction (supports ₹, Rs, $, etc.)
-    const amountMatch = text.match(/(?:₹|rs\.?\s*|inr\s*|usd\s*|\$)\s*([\d,]+(?:\.\d{2})?)/i);
-    const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : 0;
+    // Amount extraction (supports ₹, Rs, $, €, and European formats like 1.234,56)
+    const amountMatch = text.match(/(?:₹|rs\.?\s*|inr\s*|usd\s*|\$|€)\s*([\d.,]+\d)/i);
+    let amount = 0;
+    if (amountMatch) {
+      const raw = amountMatch[1];
+      const lastDot = raw.lastIndexOf('.');
+      const lastComma = raw.lastIndexOf(',');
+      if (lastDot > -1 && lastComma > -1) {
+        // Both separators present — last one is decimal
+        if (lastComma > lastDot) {
+          // European: 1.234,56
+          amount = parseFloat(raw.replace(/\./g, '').replace(',', '.'));
+        } else {
+          // US/Indian: 1,234.56
+          amount = parseFloat(raw.replace(/,/g, ''));
+        }
+      } else if (lastComma > -1 && /,\d{2}$/.test(raw)) {
+        // Comma followed by exactly 2 digits at end — treat as decimal
+        amount = parseFloat(raw.replace(',', '.'));
+      } else {
+        amount = parseFloat(raw.replace(/,/g, ''));
+      }
+    }
 
     // Currency detection
-    const currency = /₹|rs\.?|inr/i.test(text) ? 'INR' : /\$|usd/i.test(text) ? 'USD' : 'INR';
+    const currency = /₹|rs\.?|inr/i.test(text) ? 'INR' : /€|eur/i.test(text) ? 'EUR' : /\$|usd/i.test(text) ? 'USD' : 'INR';
 
     // Due date extraction
     const dueDateMatch = text.match(/(?:due|by|before|on)\s+(\d{1,2}[\s/-]\w+[\s/-]\d{2,4}|\d{1,2}[\s/-]\d{1,2}[\s/-]\d{2,4})/i);
