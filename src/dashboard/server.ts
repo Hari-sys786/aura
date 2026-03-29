@@ -71,6 +71,37 @@ export class Dashboard {
         this.json(res, this.storage.sqlite.auditQuery({ limit }));
       } else if (path === '/api/cache') {
         this.json(res, this.storage.cache.stats());
+      } else if (path === '/api/whatsapp' && req.method === 'POST') {
+        const body = await this.readBody(req);
+        const { WhatsAppChannel } = await import('../channels/whatsapp.js');
+        const wa = new WhatsAppChannel({
+          phoneNumberId: process.env['WA_PHONE_NUMBER_ID'] ?? '',
+          accessToken: process.env['WA_ACCESS_TOKEN'] ?? '',
+          verifyToken: process.env['WA_VERIFY_TOKEN'] ?? '',
+        }, this.agent, this.log);
+        await wa.handleWebhook(body);
+        this.json(res, { status: 'ok' });
+      } else if (path === '/api/whatsapp' && req.method === 'GET') {
+        // WhatsApp webhook verification
+        const mode = url.searchParams.get('hub.mode') ?? '';
+        const token = url.searchParams.get('hub.verify_token') ?? '';
+        const challenge = url.searchParams.get('hub.challenge') ?? '';
+        const verifyToken = process.env['WA_VERIFY_TOKEN'] ?? 'aura-verify';
+        if (mode === 'subscribe' && token === verifyToken) {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end(challenge);
+        } else {
+          res.writeHead(403);
+          res.end('Forbidden');
+        }
+      } else if (path === '/api/push/register' && req.method === 'POST') {
+        const body = await this.readBody(req);
+        const { userId, platform, token: deviceToken, deviceName } = JSON.parse(body);
+        // Store push token
+        this.storage.set('push-tokens', `${userId}:${platform}`, {
+          userId, platform, token: deviceToken, deviceName, registeredAt: new Date().toISOString(),
+        });
+        this.json(res, { status: 'registered' });
       } else if (path === '/api/alexa' && req.method === 'POST') {
         // Alexa webhook endpoint
         const body = await this.readBody(req);
