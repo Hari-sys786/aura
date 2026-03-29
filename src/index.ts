@@ -85,7 +85,10 @@ async function main(): Promise<void> {
 
   // Document vault
   const docPlugin = new DocumentPlugin();
-  await plugins.register(docPlugin, { vaultPath: config.storage.dataDir + '/vault' });
+  await plugins.register(docPlugin, {
+    vaultPath: config.storage.dataDir + '/vault',
+    encryptionKey: config.masterPassword || undefined,
+  });
   await plugins.activate('documents');
 
   // Subscription watchdog

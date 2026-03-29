@@ -1,7 +1,7 @@
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
 import { join, extname, basename } from 'path';
-import { randomUUID } from 'crypto';
+import { randomUUID, createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import type { AuraPlugin, PluginContext } from '../core/plugin-bus.js';
 
 export interface Document {
@@ -28,6 +28,7 @@ interface DocumentConfig {
   ocrEnabled: boolean;
   autoCategorizse: boolean;
   expiryAlertDays: number;
+  encryptionKey?: string; // master password for at-rest encryption
 }
 
 export class DocumentPlugin implements AuraPlugin {
@@ -36,6 +37,7 @@ export class DocumentPlugin implements AuraPlugin {
   private ctx!: PluginContext;
   private config!: DocumentConfig;
   private vaultPath!: string;
+  private encKey: Buffer | null = null;
 
   async onLoad(ctx: PluginContext): Promise<void> {
     this.ctx = ctx;
@@ -50,6 +52,12 @@ export class DocumentPlugin implements AuraPlugin {
 
     this.vaultPath = this.config.vaultPath;
     mkdirSync(this.vaultPath, { recursive: true });
+
+    // Derive encryption key from master password
+    if (this.config.encryptionKey) {
+      this.encKey = scryptSync(this.config.encryptionKey, 'aura-vault-salt', 32);
+      ctx.logger.info('Document vault encryption enabled (AES-256-GCM)');
+    }
 
     ctx.logger.info('Document vault plugin loaded');
   }
@@ -85,25 +93,35 @@ export class DocumentPlugin implements AuraPlugin {
       throw new Error(`File too large: ${sizeMb.toFixed(1)}MB (max: ${this.config.maxFileSizeMb}MB)`);
     }
 
-    writeFileSync(vaultFilePath, content);
+    // Encrypt at rest if key is set
+    const stored = this.encryptBuffer(content);
+    writeFileSync(vaultFilePath, stored);
 
-    // Extract text
+    // For text extraction, use the original unencrypted content
+    // (OCR/pdftotext need the raw file, not encrypted blob)
+    const tmpPath = `/tmp/aura-ingest-${id}${ext}`;
+    writeFileSync(tmpPath, content);
+
     let text = '';
     let ocrText: string | undefined;
 
-    if (ext === '.pdf') {
-      text = this.extractPdfText(vaultFilePath);
-      if (!text.trim() && this.config.ocrEnabled) {
-        ocrText = this.ocrFile(vaultFilePath);
-        text = ocrText;
+    try {
+      if (ext === '.pdf') {
+        text = this.extractPdfText(tmpPath);
+        if (!text.trim() && this.config.ocrEnabled) {
+          ocrText = this.ocrFile(tmpPath);
+          text = ocrText;
+        }
+      } else if (['.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'].includes(ext)) {
+        if (this.config.ocrEnabled) {
+          ocrText = this.ocrFile(tmpPath);
+          text = ocrText ?? '';
+        }
+      } else if (['.txt', '.md', '.csv', '.json', '.xml'].includes(ext)) {
+        text = content.toString('utf-8');
       }
-    } else if (['.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'].includes(ext)) {
-      if (this.config.ocrEnabled) {
-        ocrText = this.ocrFile(vaultFilePath);
-        text = ocrText ?? '';
-      }
-    } else if (['.txt', '.md', '.csv', '.json', '.xml'].includes(ext)) {
-      text = readFileSync(vaultFilePath, 'utf-8');
+    } finally {
+      try { unlinkSync(tmpPath); } catch { /* ignore */ }
     }
 
     // Auto-categorize
@@ -389,6 +407,28 @@ export class DocumentPlugin implements AuraPlugin {
   }
 
   // --- Helpers ---
+
+  // --- Encryption at rest ---
+
+  private encryptBuffer(data: Buffer): Buffer {
+    if (!this.encKey) return data;
+    const iv = randomBytes(16);
+    const cipher = createCipheriv('aes-256-gcm', this.encKey, iv);
+    const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    // Format: [iv:16][authTag:16][encrypted]
+    return Buffer.concat([iv, authTag, encrypted]);
+  }
+
+  private decryptBuffer(data: Buffer): Buffer {
+    if (!this.encKey) return data;
+    const iv = data.subarray(0, 16);
+    const authTag = data.subarray(16, 32);
+    const encrypted = data.subarray(32);
+    const decipher = createDecipheriv('aes-256-gcm', this.encKey, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  }
 
   private getMimeType(ext: string): string {
     const types: Record<string, string> = {

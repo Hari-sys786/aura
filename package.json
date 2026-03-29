@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "setup": "node dist/setup.js",
     "clean": "rm -rf dist"
   },
   "engines": {
@@ -15,6 +16,8 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@lancedb/lancedb": "^0.27.1",
+    "apache-arrow": "^21.1.0",
     "better-sqlite3": "^11.0.0",
     "cron": "^3.1.0",
     "dotenv": "^16.4.0",
