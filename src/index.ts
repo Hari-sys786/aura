@@ -8,6 +8,7 @@ import { CryptoVault } from './core/crypto.js';
 import { Agent } from './core/agent.js';
 import { TelegramChannel } from './channels/telegram.js';
 import { Dashboard } from './dashboard/server.js';
+import { HomeAssistantChannel } from './channels/homeassistant.js';
 import { EmailPlugin } from './plugins/email.js';
 import { FinancePlugin } from './plugins/finance.js';
 import { CalendarPlugin } from './plugins/calendar.js';
@@ -143,7 +144,22 @@ async function main(): Promise<void> {
     log.info('Telegram not configured — skipping (set TELEGRAM_BOT_TOKEN)');
   }
 
-  // 9. Start web dashboard
+  // 9. Home Assistant (if configured)
+  let ha: HomeAssistantChannel | null = null;
+  if (config.homeAssistant.url && config.homeAssistant.token) {
+    ha = new HomeAssistantChannel(
+      config.homeAssistant,
+      agent,
+      storage,
+      plugins,
+      childLogger(log, 'ha'),
+    );
+    await ha.connect();
+  } else {
+    log.info('Home Assistant not configured — skipping (set HA_URL + HA_TOKEN)');
+  }
+
+  // 10. Start web dashboard
   const dashboard = new Dashboard(
     { port: config.server.port, host: config.server.host },
     storage, plugins, agent, scheduler,

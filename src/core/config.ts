@@ -32,12 +32,24 @@ export interface GoogleConfig {
   refreshToken: string;
 }
 
+export interface HomeAssistantConfig {
+  url: string;
+  token: string;
+  pollIntervalMs: number;
+}
+
+export interface AlexaConfig {
+  skillId: string;
+}
+
 export interface AuraConfig {
   ai: AiConfig;
   storage: StorageConfig;
   server: ServerConfig;
   telegram: TelegramConfig;
   google: GoogleConfig;
+  homeAssistant: HomeAssistantConfig;
+  alexa: AlexaConfig;
   masterPassword: string;
   plugins: string[];
 }
@@ -98,6 +110,14 @@ export function loadConfig(): AuraConfig {
       clientSecret: get(yaml, 'google.clientSecret') ?? env('GOOGLE_CLIENT_SECRET'),
       redirectUri: get(yaml, 'google.redirectUri') ?? env('GOOGLE_REDIRECT_URI', 'http://localhost:3000/auth/google/callback'),
       refreshToken: get(yaml, 'google.refreshToken') ?? env('GOOGLE_REFRESH_TOKEN'),
+    },
+    homeAssistant: {
+      url: get(yaml, 'homeAssistant.url') ?? env('HA_URL'),
+      token: get(yaml, 'homeAssistant.token') ?? env('HA_TOKEN'),
+      pollIntervalMs: parseInt(get(yaml, 'homeAssistant.pollIntervalMs') ?? env('HA_POLL_INTERVAL', '60000'), 10),
+    },
+    alexa: {
+      skillId: get(yaml, 'alexa.skillId') ?? env('ALEXA_SKILL_ID'),
     },
     masterPassword: get(yaml, 'masterPassword') ?? env('MASTER_PASSWORD'),
     plugins: [],

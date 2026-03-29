@@ -71,6 +71,22 @@ export class Dashboard {
         this.json(res, this.storage.sqlite.auditQuery({ limit }));
       } else if (path === '/api/cache') {
         this.json(res, this.storage.cache.stats());
+      } else if (path === '/api/alexa' && req.method === 'POST') {
+        // Alexa webhook endpoint
+        const body = await this.readBody(req);
+        const { AlexaChannel } = await import('../channels/alexa.js');
+        const alexa = new AlexaChannel(this.agent, this.log);
+        const alexaRes = await alexa.handleRequest(body);
+        this.json(res, alexaRes);
+      } else if (path === '/api/google-home' && req.method === 'POST') {
+        // Google Home webhook endpoint
+        const body = await this.readBody(req);
+        const { GoogleHomeChannel } = await import('../channels/google-home.js');
+        const gh = new GoogleHomeChannel(this.agent, this.log);
+        const ghRes = await gh.handleRequest(body);
+        this.json(res, ghRes);
+      } else if (path === '/api/ha/states') {
+        this.json(res, this.getData('ha-states', 100));
       } else if (path === '/api/chat' && req.method === 'POST') {
         const body = await this.readBody(req);
         const { message } = JSON.parse(body);

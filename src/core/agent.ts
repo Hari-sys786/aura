@@ -235,6 +235,24 @@ Be concise. Answer with actual data, not instructions.`;
       }
     }
 
+    // Smart home intent
+    const haKeywords = ['light', 'switch', 'turn on', 'turn off', 'temperature', 'thermostat', 'lock', 'home', 'device', 'smart'];
+    if (haKeywords.some(k => msg.includes(k))) {
+      try {
+        const states = this.storage.sqlite.list('ha-states');
+        if (states.length > 0) {
+          const list = states.slice(0, 15).map(s => {
+            const val = JSON.parse(s.value);
+            const name = (val.attributes?.friendly_name as string) ?? val.entity_id;
+            return `- ${name}: ${val.state}`;
+          });
+          parts.push(`Smart Home Devices (${states.length}):\n${list.join('\n')}`);
+        }
+      } catch (err) {
+        this.log.error(`Failed to fetch HA data: ${err}`);
+      }
+    }
+
     return parts.length > 0 ? parts.join('\n\n') : null;
   }
 
