@@ -5,13 +5,13 @@
 }
 
 :root {
-  --bg: #060608;
-  --surface-1: #0c0c10;
-  --surface-2: #111116;
-  --surface-3: #1a1a22;
-  --surface-4: #22222c;
-  --border: rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.12);
+  --bg: #050507;
+  --surface-1: #0e0e14;
+  --surface-2: #141420;
+  --surface-3: #1c1c2a;
+  --surface-4: #252535;
+  --border: rgba(255,255,255,0.1);
+  --border-strong: rgba(255,255,255,0.16);
   --accent: #e8a03e;
   --accent-dim: rgba(232,160,62,0.15);
   --accent-glow: rgba(232,160,62,0.08);
