@@ -1,137 +1,72 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Zap } from 'lucide-react'
-import { format } from 'date-fns'
-import { api } from '../api'
-import styles from './Chat.module.css'
+import { useState, useRef, useEffect } from 'react';
+import { Send } from 'lucide-react';
+import styles from './Chat.module.css';
 
-interface Message {
-  id: string
-  role: 'user' | 'ai'
-  content: string
-  ts: Date
-}
-
-const SUGGESTIONS = [
-  'What are my upcoming bills?',
-  'Summarize my emails',
-  'Any expiring documents?',
-  'Show my spending this month',
-]
+interface Message { role: 'user' | 'assistant'; content: string; }
 
 export default function Chat() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const endRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const msgsEnd = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  useEffect(() => { msgsEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const send = useCallback(async (text: string) => {
-    const msg = text.trim()
-    if (!msg || loading) return
-
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg, ts: new Date() }])
-    setInput('')
-    setLoading(true)
-
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const msg = input.trim();
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: msg }]);
+    setLoading(true);
     try {
-      const res = await api.chat(msg)
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'ai',
-        content: res.response,
-        ts: new Date(),
-      }])
-    } catch (err) {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'ai',
-        content: 'Sorry, I encountered an error. Please try again.',
-        ts: new Date(),
-      }])
-    } finally {
-      setLoading(false)
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg }),
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response || data.error || 'No response' }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Try again.' }]);
     }
-  }, [loading])
-
-  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send(input)
-    }
-  }
+    setLoading(false);
+  };
 
   return (
-    <div className={`${styles.page} fade-in`}>
-      <div className={styles.messages}>
-        {messages.length === 0 ? (
-          <div className={styles.welcome}>
-            <div className={styles.welcomeIcon}>
-              <Zap size={22} color="var(--accent)" />
+    <div className={styles.page}>
+      <div className={styles.chatArea}>
+        <div className={styles.messages}>
+          {messages.length === 0 && (
+            <div className={styles.empty}>
+              Ask Aura anything — schedule, emails, spending, documents...
             </div>
-            <div className={styles.welcomeTitle}>Chat with Aura</div>
-            <div className={styles.welcomeSub}>
-              Your AI life management agent. Ask me anything about your data.
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={`${styles.msg} ${styles[m.role]}`}>
+              {m.content}
             </div>
-            <div className={styles.suggestions}>
-              {SUGGESTIONS.map(s => (
-                <button key={s} className={styles.suggestion} onClick={() => send(s)}>
-                  {s}
-                </button>
-              ))}
+          ))}
+          {loading && (
+            <div className={`${styles.msg} ${styles.assistant}`}>
+              <span className={styles.dots}>● ● ●</span>
             </div>
-          </div>
-        ) : (
-          messages.map(msg => (
-            <div key={msg.id} className={`${styles.message} ${msg.role === 'user' ? styles.user : ''}`}>
-              <div className={`${styles.avatar} ${msg.role === 'ai' ? styles.ai : styles.user}`}>
-                {msg.role === 'ai' ? '⚡' : 'U'}
-              </div>
-              <div>
-                <div className={`${styles.bubble} ${msg.role === 'ai' ? styles.ai : styles.user}`}>
-                  {msg.content}
-                </div>
-                <div className={styles.timestamp}>{format(msg.ts, 'h:mm a')}</div>
-              </div>
-            </div>
-          ))
-        )}
-        {loading && (
-          <div className={styles.message}>
-            <div className={`${styles.avatar} ${styles.ai}`}>⚡</div>
-            <div className={styles.typing}>
-              <div className={styles.typingDot} />
-              <div className={styles.typingDot} />
-              <div className={styles.typingDot} />
-            </div>
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      <div className={styles.inputArea}>
-        <div className={styles.inputWrap}>
-          <textarea
-            ref={inputRef}
-            className={styles.input}
-            placeholder="Ask Aura anything…"
+          )}
+          <div ref={msgsEnd} />
+        </div>
+        <div className={styles.inputBar}>
+          <input
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKey}
-            rows={1}
+            onKeyDown={e => e.key === 'Enter' && send()}
+            placeholder="Ask Aura anything..."
+            className={styles.input}
+            autoComplete="off"
           />
+          <button onClick={send} className={styles.sendBtn} disabled={loading}>
+            <Send size={18} />
+          </button>
         </div>
-        <button
-          className={styles.sendBtn}
-          onClick={() => send(input)}
-          disabled={!input.trim() || loading}
-        >
-          <Send size={16} strokeWidth={2} />
-        </button>
       </div>
     </div>
-  )
+  );
 }
