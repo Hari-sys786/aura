@@ -1,0 +1,121 @@
+.page { display: flex; flex-direction: column; gap: 16px; }
+
+.top {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .top { grid-template-columns: 1fr; }
+}
+
+.section {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionTitle { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+.totalBadge {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+/* Sub cards */
+.subList { padding: 4px 0; }
+
+.subItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+  cursor: pointer;
+}
+.subItem:last-child { border-bottom: none; }
+.subItem:hover { background: var(--surface-2); }
+
+.subAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--surface-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.subInfo { flex: 1; min-width: 0; }
+.subName { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.subFreq { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+.subRight { text-align: right; }
+.subAmount { font-size: 14px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); }
+.subRenewal { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); }
+
+/* Summary panel */
+.summaryInner { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.summaryLabel { font-size: 12px; color: var(--text-muted); }
+.summaryVal { font-size: 14px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); }
+
+.costBar { margin-top: 4px; }
+.costBarLabel { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.costBarItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.costBarTrack { flex: 1; height: 4px; background: var(--surface-4); border-radius: 2px; overflow: hidden; }
+.costBarFill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+.costBarName { font-size: 11px; color: var(--text-secondary); min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.costBarAmt { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); min-width: 50px; text-align: right; }
+
+/* Timeline */
+.timeline { padding: 4px 0; }
+.timelineItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.timelineItem:last-child { border-bottom: none; }
+.timelineDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.timelineName { flex: 1; font-size: 13px; color: var(--text-secondary); }
+.timelineDate { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+.timelineAmt { font-size: 13px; font-weight: 600; font-family: var(--font-mono); color: var(--text-primary); }

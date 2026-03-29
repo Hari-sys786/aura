@@ -1,0 +1,19 @@
+.page { }
+.title { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+.section { margin-bottom: 28px; }
+.sectionTitle { font-size: 13px; color: #65657a; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 12px; }
+.statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.pluginGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.plugin { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #0c0c10; border: 1px solid #1e1e28; border-radius: 10px; }
+.pluginDot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.active .pluginDot { background: #34d399; }
+.inactive .pluginDot { background: #f87171; }
+.pluginName { font-size: 14px; font-weight: 600; }
+.pluginMeta { font-size: 11px; color: #65657a; font-family: 'JetBrains Mono', monospace; }
+.cacheGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.cacheStat { background: #0c0c10; border: 1px solid #1e1e28; border-radius: 10px; padding: 16px; text-align: center; }
+.cacheVal { display: block; font: 600 22px 'JetBrains Mono', monospace; color: #e8a03e; }
+.cacheLabel { font-size: 11px; color: #65657a; text-transform: uppercase; letter-spacing: 1px; }
+.endpoints { display: flex; flex-wrap: wrap; gap: 8px; }
+.endpoint { padding: 6px 12px; background: #0c0c10; border: 1px solid #1e1e28; border-radius: 6px; font: 12px 'JetBrains Mono', monospace; color: #a0a0b5; }
+@media (max-width: 700px) { .statsGrid, .cacheGrid { grid-template-columns: repeat(2, 1fr); } }

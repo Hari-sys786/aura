@@ -1,0 +1,125 @@
+.page { display: flex; flex-direction: column; gap: 16px; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.section {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionTitle { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+/* Week view */
+.weekGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.dayCol {
+  border-right: 1px solid var(--border);
+  min-height: 160px;
+}
+.dayCol:last-child { border-right: none; }
+
+.dayHead {
+  padding: 8px 8px 6px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.dayName {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.dayNum {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.dayCol.today .dayNum {
+  color: var(--accent);
+}
+
+.dayEvents { padding: 6px; display: flex; flex-direction: column; gap: 3px; }
+
+.miniEvent {
+  padding: 3px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  background: var(--accent-dim);
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Upcoming list */
+.eventList { padding: 4px 0; }
+
+.eventItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+  cursor: pointer;
+}
+.eventItem:last-child { border-bottom: none; }
+.eventItem:hover { background: var(--surface-2); }
+
+.eventDate {
+  text-align: center;
+  flex-shrink: 0;
+  width: 38px;
+  background: var(--surface-3);
+  border-radius: 8px;
+  padding: 6px 4px;
+}
+
+.eventDateDay { font-size: 18px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); line-height: 1; }
+.eventDateMonth { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-top: 2px; }
+
+.eventInfo { flex: 1; min-width: 0; }
+.eventTitle { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.eventTime { font-size: 12px; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); }
+.eventLoc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+.allDayBadge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent-dim);
+  color: var(--accent);
+  margin-left: 6px;
+}

@@ -1,0 +1,103 @@
+.page { display: flex; flex-direction: column; gap: 16px; }
+
+.top {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .top { grid-template-columns: 1fr; }
+}
+
+.section {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chartWrap {
+  padding: 16px;
+}
+
+.catList { padding: 4px 0; }
+
+.catItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.catItem:last-child { border-bottom: none; }
+.catItem:hover { background: var(--surface-2); }
+
+.catDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.catName { flex: 1; font-size: 13px; color: var(--text-secondary); }
+.catAmount { font-size: 13px; font-family: var(--font-mono); color: var(--text-primary); font-weight: 500; }
+.catPct { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); min-width: 36px; text-align: right; }
+
+.txTable { overflow: hidden; }
+
+.txHead {
+  display: grid;
+  grid-template-columns: 1fr 1fr 90px 90px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+
+.txRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 90px 90px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  transition: background var(--transition);
+}
+.txRow:last-child { border-bottom: none; }
+.txRow:hover { background: var(--surface-2); }
+
+.merchant { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.category { font-size: 12px; color: var(--text-muted); }
+
+.amount {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+.amount.debit { color: var(--error); }
+.amount.credit { color: var(--success); }
+
+.date { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); text-align: right; }
+
+@media (max-width: 640px) {
+  .txHead, .txRow { grid-template-columns: 1fr 80px; }
+  .txHead > :nth-child(2), .txRow > :nth-child(2),
+  .txHead > :nth-child(4), .txRow > :nth-child(4) { display: none; }
+}

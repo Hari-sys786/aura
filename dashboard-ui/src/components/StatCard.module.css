@@ -1,0 +1,71 @@
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color var(--transition), background var(--transition);
+  animation: fadeIn 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.iconWrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.value {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.skeleton {
+  background: var(--surface-3);
+  border-radius: 4px;
+  animation: pulse 1.4s ease infinite;
+}
+
+.skeletonValue {
+  composes: skeleton;
+  height: 26px;
+  width: 60px;
+}
+
+.skeletonSub {
+  composes: skeleton;
+  height: 11px;
+  width: 90px;
+}
