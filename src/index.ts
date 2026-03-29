@@ -7,6 +7,7 @@ import { Scheduler } from './core/scheduler.js';
 import { CryptoVault } from './core/crypto.js';
 import { Agent } from './core/agent.js';
 import { TelegramChannel } from './channels/telegram.js';
+import { Dashboard } from './dashboard/server.js';
 import { EmailPlugin } from './plugins/email.js';
 import { FinancePlugin } from './plugins/finance.js';
 import { CalendarPlugin } from './plugins/calendar.js';
@@ -142,7 +143,14 @@ async function main(): Promise<void> {
     log.info('Telegram not configured — skipping (set TELEGRAM_BOT_TOKEN)');
   }
 
-  // 9. Boot summary
+  // 9. Start web dashboard
+  const dashboard = new Dashboard(
+    { port: config.server.port, host: config.server.host },
+    storage, plugins, agent, scheduler,
+    childLogger(log, 'dashboard'),
+  );
+
+  // 10. Boot summary
   const cacheStats = storage.cache.stats();
   log.info('=== Aura Boot Summary ===');
   log.info(`  AI: ${config.ai.provider} / ${config.ai.model} (${aiReachable ? 'connected' : 'offline'})`);
@@ -158,6 +166,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     log.info(`Received ${signal} — shutting down...`);
 
+    dashboard.stop();
     if (telegram) telegram.stop();
     scheduler.stopAll();
     await plugins.shutdownAll();

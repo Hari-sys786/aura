@@ -126,6 +126,8 @@ async function main() {
   // ============================================
 
   await test('add and search vectors', async () => {
+    // Clean any leftover data
+    await storage.vector.drop('test-vectors');
     await storage.vectorAdd('test-vectors', [
       { id: 'v1', text: 'hello world', vector: [1, 0, 0], metadata: { type: 'greeting' } },
       { id: 'v2', text: 'goodbye world', vector: [0, 1, 0], metadata: { type: 'farewell' } },

@@ -49,7 +49,12 @@ export class VectorStore {
   constructor(dataDir: string, logger: Logger) {
     this.dataDir = dataDir;
     this.log = logger;
-    this.init();
+    // Init is async — will fall back to in-memory until ready
+    this.init().catch(err => {
+      this.log.warn(`Vector store async init failed: ${err}`);
+      this.useFallback = true;
+      this.ready = true;
+    });
   }
 
   private async init(): Promise<void> {
@@ -73,9 +78,15 @@ export class VectorStore {
   }
 
   private async ensureReady(): Promise<void> {
-    if (!this.ready) {
-      // Wait a bit for async init
+    // Wait for async init (max 2 seconds)
+    let attempts = 0;
+    while (!this.ready && attempts < 20) {
       await new Promise(r => setTimeout(r, 100));
+      attempts++;
+    }
+    if (!this.ready) {
+      this.useFallback = true;
+      this.ready = true;
     }
   }
 

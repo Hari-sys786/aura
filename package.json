@@ -9,6 +9,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "setup": "node dist/setup.js",
+    "cli": "node dist/cli.js",
+    "doctor": "node dist/cli.js doctor",
     "clean": "rm -rf dist"
   },
   "engines": {
