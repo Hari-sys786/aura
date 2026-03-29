@@ -1,0 +1,9 @@
+node_modules
+dist
+data
+.env
+*.db*
+.git
+test*.ts
+src
+tsconfig.json

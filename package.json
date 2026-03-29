@@ -1,6 +1,6 @@
 {
   "name": "aura",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Self-hosted AI life management agent. Privacy-first. Plugin-driven. Runs anywhere.",
   "type": "module",
   "main": "dist/index.js",
@@ -16,7 +16,15 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "bin": {
+    "aura": "dist/cli.js"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hari-sys786/aura.git"
+  },
+  "keywords": ["ai", "agent", "life-management", "self-hosted", "privacy", "telegram", "alexa", "finance"],
   "dependencies": {
     "@lancedb/lancedb": "^0.27.1",
     "apache-arrow": "^21.1.0",

@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  aura:
+    build: .
+    container_name: aura
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - aura-data:/app/data
+      - ./.env:/app/.env:ro
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/status').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  aura-data:
