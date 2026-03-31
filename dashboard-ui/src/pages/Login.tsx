@@ -19,9 +19,10 @@ export default function Login({ onLogin }: LoginProps) {
 
   // Check if first run (no users)
   useEffect(() => {
-    fetch('/api/auth/check').then(r => r.json()).then(d => {
-      if (d.needsSetup) { setIsSetup(true); setMode('register') }
-    }).catch(() => {})
+    fetch('/api/auth/check')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.needsSetup) { setIsSetup(true); setMode('register') } })
+      .catch(() => {})
   }, [])
 
   const reset = () => {
@@ -157,11 +158,13 @@ export default function Login({ onLogin }: LoginProps) {
 
           {/* Password strength indicator */}
           {!isLogin && password.length > 0 && (
-            <div className={styles.strengthBar}>
-              <div className={styles.strengthFill} style={{
-                width: `${Math.min(100, password.length * 8)}%`,
-                background: password.length < 8 ? 'var(--error)' : password.length < 12 ? 'var(--warning)' : 'var(--success)'
-              }} />
+            <div className={styles.strengthWrap}>
+              <div className={styles.strengthBar}>
+                <div className={styles.strengthFill} style={{
+                  width: `${Math.min(100, password.length * 8)}%`,
+                  background: password.length < 8 ? 'var(--error)' : password.length < 12 ? 'var(--warning)' : 'var(--success)'
+                }} />
+              </div>
               <span style={{ color: password.length < 8 ? 'var(--error)' : password.length < 12 ? 'var(--warning)' : 'var(--success)', fontSize: 11 }}>
                 {password.length < 8 ? 'Too short' : password.length < 12 ? 'Fair' : 'Strong'}
               </span>

@@ -132,16 +132,22 @@ export class Dashboard {
         // Fallback if no React build
         res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('<html><body style="background:#060608;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh"><h1>Run npm run build in dashboard-ui/ first</h1></body></html>'); return;
       }
+      // ── Data access: viewers see empty, owner sees everything ─────────────
+      const reqToken = this.extractToken(req);
+      const requester = reqToken ? this.auth.verify(reqToken) : null;
+      const isOwner = requester?.role === 'owner';
+
       if (p === '/api/status') return this.json(res, await this.status());
       if (p === '/api/plugins') return this.json(res, this.plugins.listPlugins());
-      if (p === '/api/emails') return this.json(res, this.data('emails', +(url.searchParams.get('limit') ?? 30)));
+      if (p === '/api/emails') return this.json(res, isOwner ? this.data('emails', +(url.searchParams.get('limit') ?? 30)) : []);
       if (p === '/api/calendar') {
+        if (!isOwner) return this.json(res, []);
         const events = this.data('calendar-events', 100);
         const now = new Date().toISOString();
         const upcoming = events.filter((e: any) => (e.end || e.start) >= now);
         return this.json(res, upcoming.slice(0, 30));
       }
-      if (p === '/api/transactions') return this.json(res, this.data('transactions', +(url.searchParams.get('limit') ?? 200)));
+      if (p === '/api/transactions') return this.json(res, isOwner ? this.data('transactions', +(url.searchParams.get('limit') ?? 200)) : []);
 
       // ── Finance Query API (for Alexa, Google Assistant, future voice integrations) ──
       if (p === '/api/finance/query' && req.method === 'POST') {
@@ -206,10 +212,11 @@ export class Dashboard {
 
         return this.json(res, result);
       }
-      if (p === '/api/documents') return this.json(res, this.data('documents', 50));
+      if (p === '/api/documents') return this.json(res, isOwner ? this.data('documents', 50) : []);
 
       // Bills with due dates extracted from email
       if (p === '/api/bills') {
+        if (!isOwner) return this.json(res, []);
         const emails = this.data('emails', 500) as Array<Record<string, unknown>>;
         const bills = emails
           .filter((e: any) => e.category === 'bill' && e.extractedData)
@@ -235,8 +242,8 @@ export class Dashboard {
           });
         return this.json(res, bills);
       }
-      if (p === '/api/subscriptions') return this.json(res, this.data('subscriptions', 50));
-      if (p === '/api/audit') return this.json(res, this.storage.sqlite.auditQuery({ limit: 50 }));
+      if (p === '/api/subscriptions') return this.json(res, isOwner ? this.data('subscriptions', 50) : []);
+      if (p === '/api/audit') return this.json(res, isOwner ? this.storage.sqlite.auditQuery({ limit: 50 }) : []);
       if (p === '/api/cache') return this.json(res, this.storage.cache.stats());
       if (p === '/api/whatsapp' && req.method === 'POST') {
         const body = await this.bodyRaw(req);

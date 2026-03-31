@@ -26,6 +26,14 @@ const navItems = [
 ]
 
 export default function Sidebar({ collapsed, mobileOpen, onToggle, onOverlayClick }: SidebarProps) {
+  const currentUser = localStorage.getItem('aura_user') || 'user'
+
+  const handleLogout = () => {
+    localStorage.removeItem('aura_token')
+    localStorage.removeItem('aura_user')
+    window.location.reload()
+  }
+
   const sidebarClass = [
     styles.sidebar,
     collapsed ? styles.collapsed : '',
@@ -41,6 +49,19 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onOverlayClic
             <Zap size={14} strokeWidth={2.5} />
           </div>
           <span className={styles.logoText}>Aura</span>
+        </div>
+
+        {/* User badge */}
+        <div className={styles.userBadge}>
+          <div className={styles.userAvatar}>
+            {currentUser.charAt(0).toUpperCase()}
+          </div>
+          <div className={styles.userInfo}>
+            <span className={styles.userName}>{currentUser}</span>
+          </div>
+          <button className={styles.logoutBtn} onClick={handleLogout} title="Sign out">
+            <LogOut size={14} />
+          </button>
         </div>
 
         <div className={styles.nav}>
@@ -79,14 +100,6 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onOverlayClic
         </div>
 
         <div className={styles.footer}>
-          <button className={styles.collapseBtn} onClick={() => {
-            localStorage.removeItem('aura_token')
-            localStorage.removeItem('aura_user')
-            window.location.reload()
-          }} style={{ color: 'var(--error)' }} title="Sign out">
-            <LogOut size={16} strokeWidth={1.8} />
-            <span className={styles.collapseBtnText}>Sign out</span>
-          </button>
           <button className={styles.collapseBtn} onClick={onToggle}>
             {collapsed
               ? <ChevronRight size={18} strokeWidth={1.8} />

@@ -64,25 +64,13 @@
 .eyeBtn:hover { color: var(--text-primary); }
 
 /* Password strength */
-.strengthBar {
-  display: flex; align-items: center; gap: 8px;
-}
-.strengthBar::before { content: ''; display: block; flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; position: relative; }
-.strengthFill {
-  /* Can't use ::before fill trick in CSS modules, JS handles this via inline style in the parent div */
-  height: 3px; border-radius: 2px; transition: all 0.3s;
-  position: absolute; left: 0; top: 0;
-}
-/* Override: use a wrapper approach */
+.strengthWrap { display: flex; flex-direction: column; gap: 4px; }
 .strengthBar {
   background: var(--border);
   height: 3px; border-radius: 2px;
   overflow: hidden; position: relative;
-  margin: -4px 0 4px;
 }
 .strengthFill { height: 100%; border-radius: 2px; transition: all 0.3s; position: absolute; left: 0; top: 0; }
-/* Fix: label next to bar */
-.strengthBar + span { font-size: 11px; }
 
 .error {
   background: #ef44441a; border: 1px solid #ef444433;
