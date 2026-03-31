@@ -2,11 +2,22 @@ import http from 'http';
 import { URL } from 'url';
 import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
+import { createHmac, timingSafeEqual } from 'crypto';
+import jwt from 'jsonwebtoken';
 import type { MemoryStore } from '../core/storage/index.js';
 import type { PluginBus } from '../core/plugin-bus.js';
 import type { Agent } from '../core/agent.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { Logger } from '../core/logger.js';
+
+// ─── Auth Config ──────────────────────────────────────────────────────────────
+const DASHBOARD_USER = process.env['DASHBOARD_USER'] || 'admin';
+const DASHBOARD_PASSWORD = process.env['DASHBOARD_PASSWORD'] || 'aura2026';
+const JWT_SECRET = process.env['JWT_SECRET'] || createHmac('sha256', 'aura-default').update(DASHBOARD_PASSWORD).digest('hex');
+const JWT_EXPIRY = '7d';
+
+// Public paths that don't require auth
+const PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/check']);
 
 interface DashboardConfig { port: number; host: string; }
 
@@ -35,10 +46,59 @@ export class Dashboard {
     const p = url.pathname;
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
     try {
+      // ── Login endpoint ────────────────────────────────────────────────────
+      if (p === '/api/auth/login' && req.method === 'POST') {
+        const body = await this.body(req) as { username?: string; password?: string };
+        const userOk = body.username === DASHBOARD_USER;
+        const passOk = (() => {
+          try {
+            const a = Buffer.from(body.password ?? '');
+            const b = Buffer.from(DASHBOARD_PASSWORD);
+            return a.length === b.length && timingSafeEqual(a, b);
+          } catch { return false; }
+        })();
+        if (userOk && passOk) {
+          const token = jwt.sign({ user: DASHBOARD_USER, role: 'admin' }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+          return this.json(res, { ok: true, token, user: DASHBOARD_USER });
+        }
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid credentials' }));
+        return;
+      }
+
+      // ── Auth check (validate existing token) ──────────────────────────────
+      if (p === '/api/auth/check') {
+        const token = this.extractToken(req);
+        if (!token) { res.writeHead(401); res.end(JSON.stringify({ ok: false })); return; }
+        try {
+          const payload = jwt.verify(token, JWT_SECRET) as { user: string; role: string };
+          return this.json(res, { ok: true, user: payload.user, role: payload.role });
+        } catch {
+          res.writeHead(401); res.end(JSON.stringify({ ok: false, error: 'Token expired or invalid' })); return;
+        }
+      }
+
+      // ── Auth middleware: protect all /api/* except public paths ──────────
+      if (p.startsWith('/api') && !PUBLIC_PATHS.has(p)) {
+        const token = this.extractToken(req);
+        if (!token) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized — login required' }));
+          return;
+        }
+        try {
+          jwt.verify(token, JWT_SECRET);
+        } catch {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Token expired — please login again' }));
+          return;
+        }
+      }
+
       // Serve React dashboard (static files)
       if (!p.startsWith('/api')) {
         const dashDir = join(process.cwd(), 'dist-dashboard');
@@ -164,7 +224,7 @@ export class Dashboard {
       if (p === '/api/audit') return this.json(res, this.storage.sqlite.auditQuery({ limit: 50 }));
       if (p === '/api/cache') return this.json(res, this.storage.cache.stats());
       if (p === '/api/whatsapp' && req.method === 'POST') {
-        const body = await this.body(req);
+        const body = await this.bodyRaw(req);
         const { WhatsAppChannel } = await import('../channels/whatsapp.js');
         const wa = new WhatsAppChannel({ phoneNumberId: process.env['WA_PHONE_NUMBER_ID'] ?? '', accessToken: process.env['WA_ACCESS_TOKEN'] ?? '', verifyToken: process.env['WA_VERIFY_TOKEN'] ?? '' }, this.agent, this.log);
         await wa.handleWebhook(body); return this.json(res, { ok: true });
@@ -177,29 +237,36 @@ export class Dashboard {
         res.writeHead(403); res.end('Forbidden'); return;
       }
       if (p === '/api/alexa' && req.method === 'POST') {
-        const body = await this.body(req);
+        const body = await this.bodyRaw(req);
         const { AlexaChannel } = await import('../channels/alexa.js');
         return this.json(res, await new AlexaChannel(this.agent, this.log).handleRequest(body));
       }
       if (p === '/api/google-home' && req.method === 'POST') {
-        const body = await this.body(req);
+        const body = await this.bodyRaw(req);
         const { GoogleHomeChannel } = await import('../channels/google-home.js');
         return this.json(res, await new GoogleHomeChannel(this.agent, this.log).handleRequest(body));
       }
       if (p === '/api/ha/states') return this.json(res, this.data('ha-states', 100));
       if (p === '/api/push/register' && req.method === 'POST') {
-        const { userId, platform, token, deviceName } = JSON.parse(await this.body(req));
+        const { userId, platform, token, deviceName } = await this.body(req);
         this.storage.set('push-tokens', `${userId}:${platform}`, { userId, platform, token, deviceName, registeredAt: new Date().toISOString() });
         return this.json(res, { ok: true });
       }
       if (p === '/api/chat' && req.method === 'POST') {
-        const { message } = JSON.parse(await this.body(req));
-        if (!message) return this.json(res, { error: 'message required' }, 400);
-        const response = await this.agent.processMessage(message, { channel: 'dashboard' });
+        const { message } = await this.body(req);
+        const msg = message as string;
+        if (!msg) return this.json(res, { error: 'message required' }, 400);
+        const response = await this.agent.processMessage(msg, { channel: 'dashboard' });
         return this.json(res, { response });
       }
       this.json(res, { error: 'Not found' }, 404);
     } catch (err) { this.log.error(`Dashboard: ${err}`); this.json(res, { error: String(err) }, 500); }
+  }
+
+  private extractToken(req: http.IncomingMessage): string | null {
+    const auth = req.headers['authorization'];
+    if (auth?.startsWith('Bearer ')) return auth.slice(7);
+    return null;
   }
 
   private data(col: string, limit: number) { return this.storage.sqlite.list(col).slice(0, limit).map(r => JSON.parse(r.value)); }
@@ -213,7 +280,19 @@ export class Dashboard {
     };
   }
   private json(res: http.ServerResponse, d: unknown, s = 200) { res.writeHead(s, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(d)); }
-  private body(req: http.IncomingMessage): Promise<string> { return new Promise((ok, no) => { let b = ''; req.on('data', c => { b += c; }); req.on('end', () => ok(b)); req.on('error', no); }); }
+  private bodyRaw(req: http.IncomingMessage): Promise<string> {
+    return new Promise((ok, no) => {
+      let b = '';
+      req.on('data', c => { b += c; });
+      req.on('end', () => ok(b));
+      req.on('error', no);
+    });
+  }
+
+  private async body(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+    const raw = await this.bodyRaw(req);
+    try { return JSON.parse(raw); } catch { return {}; }
+  }
   stop() { this.server.close(); }
 }
 

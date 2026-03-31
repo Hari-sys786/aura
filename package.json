@@ -24,14 +24,25 @@
     "type": "git",
     "url": "https://github.com/Hari-sys786/aura.git"
   },
-  "keywords": ["ai", "agent", "life-management", "self-hosted", "privacy", "telegram", "alexa", "finance"],
+  "keywords": [
+    "ai",
+    "agent",
+    "life-management",
+    "self-hosted",
+    "privacy",
+    "telegram",
+    "alexa",
+    "finance"
+  ],
   "dependencies": {
     "@lancedb/lancedb": "^0.27.1",
+    "@types/jsonwebtoken": "^9.0.10",
     "apache-arrow": "^21.1.0",
     "better-sqlite3": "^11.0.0",
     "cron": "^3.1.0",
     "dotenv": "^16.4.0",
     "eventemitter3": "^5.0.1",
+    "jsonwebtoken": "^9.0.3",
     "libsodium-wrappers": "^0.7.13",
     "libsodium-wrappers-sumo": "^0.8.2",
     "lru-cache": "^10.2.0",

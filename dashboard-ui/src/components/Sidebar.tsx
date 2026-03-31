@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Mail, DollarSign, Calendar, FileText,
   CreditCard, MessageSquare, Settings, ChevronLeft, ChevronRight,
-  Zap
+  Bell, Zap, LogOut
 } from 'lucide-react'
 import styles from './Sidebar.module.css'
 
@@ -20,6 +20,7 @@ const navItems = [
   { to: '/calendar', icon: Calendar, label: 'Calendar', section: 'main' },
   { to: '/documents', icon: FileText, label: 'Documents', section: 'main' },
   { to: '/subscriptions', icon: CreditCard, label: 'Subscriptions', section: 'main' },
+  { to: '/reminders', icon: Bell, label: 'Reminders', section: 'main' },
   { to: '/chat', icon: MessageSquare, label: 'Chat with Aura', section: 'tools' },
   { to: '/settings', icon: Settings, label: 'Settings', section: 'tools' },
 ]
@@ -78,6 +79,14 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onOverlayClic
         </div>
 
         <div className={styles.footer}>
+          <button className={styles.collapseBtn} onClick={() => {
+            localStorage.removeItem('aura_token')
+            localStorage.removeItem('aura_user')
+            window.location.reload()
+          }} style={{ color: 'var(--error)' }} title="Sign out">
+            <LogOut size={16} strokeWidth={1.8} />
+            <span className={styles.collapseBtnText}>Sign out</span>
+          </button>
           <button className={styles.collapseBtn} onClick={onToggle}>
             {collapsed
               ? <ChevronRight size={18} strokeWidth={1.8} />

@@ -1,0 +1,126 @@
+.page { display: flex; flex-direction: column; gap: 16px; }
+
+.statRow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 900px) { .statRow { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .statRow { grid-template-columns: 1fr 1fr; } }
+
+.statCard {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px;
+  transition: background var(--transition);
+}
+.statCard:hover { background: var(--surface-2); }
+.statIcon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.statBody { flex: 1; }
+.statLabel { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+.statValue { font-size: 20px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); margin-top: 2px; }
+
+.section { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+
+.sectionHead {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+.sectionTitle { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+.badge {
+  background: var(--surface-3); color: var(--text-muted);
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px;
+}
+
+.addBtn {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 500; padding: 5px 12px;
+  border-radius: 6px; border: 1px solid var(--accent);
+  background: transparent; color: var(--accent); cursor: pointer;
+  transition: all 0.15s;
+}
+.addBtn:hover { background: var(--accent); color: #000; }
+
+/* ── Add Form ── */
+.addForm {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.formRow { display: flex; gap: 12px; flex-wrap: wrap; }
+.formGroup { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 140px; }
+.formGroup label { font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.input {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 10px; font-size: 13px;
+  color: var(--text-primary); outline: none; font-family: var(--font-sans);
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--accent); }
+.input::placeholder { color: var(--text-muted); }
+.formActions { display: flex; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.saveBtn {
+  padding: 7px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
+  background: var(--accent); color: #000; border: none; cursor: pointer;
+  transition: opacity 0.15s;
+}
+.saveBtn:hover { opacity: 0.85; }
+.cancelBtn {
+  padding: 7px 14px; border-radius: 6px; font-size: 13px;
+  background: transparent; color: var(--text-muted); border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.15s;
+}
+.cancelBtn:hover { color: var(--text-primary); }
+
+/* ── Bill List ── */
+.billList { display: flex; flex-direction: column; }
+
+.billItem {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.billItem:last-child { border-bottom: none; }
+.billItem:hover { filter: brightness(1.05); }
+
+.billIcon {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.billBody { flex: 1; min-width: 0; }
+.billTitle {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  display: flex; align-items: center; gap: 8px;
+}
+.cardTag {
+  font-size: 11px; font-weight: 500; padding: 2px 7px;
+  border-radius: 4px; background: var(--surface-3); color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.billSub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.billNote { font-size: 12px; color: var(--text-secondary); margin-top: 3px; font-style: italic; }
+
+.billMeta { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.billAmount { font-size: 16px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); }
+.billDueDate {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);
+}
+.urgencyBadge {
+  font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px;
+}
+
+.billActions { display: flex; gap: 6px; flex-shrink: 0; }
+.paidBtn, .deleteBtn {
+  width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; transition: all 0.15s;
+}
+.paidBtn { color: var(--success); }
+.paidBtn:hover { background: #22c55e1a; border-color: var(--success); }
+.deleteBtn { color: var(--text-muted); }
+.deleteBtn:hover { background: #ef44441a; color: var(--error); border-color: var(--error); }
+
+.empty {
+  padding: 40px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  color: var(--text-secondary); font-size: 14px; text-align: center;
+}

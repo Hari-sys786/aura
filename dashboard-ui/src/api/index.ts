@@ -1,7 +1,18 @@
 const BASE = '/api'
 
+const getToken = () => localStorage.getItem('aura_token') || ''
+
+const authHeaders = () => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${getToken()}`,
+})
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`)
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() })
+  if (res.status === 401) {
+    localStorage.removeItem('aura_token')
+    window.location.reload()
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
@@ -9,9 +20,13 @@ async function get<T>(path: string): Promise<T> {
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(body),
   })
+  if (res.status === 401) {
+    localStorage.removeItem('aura_token')
+    window.location.reload()
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
