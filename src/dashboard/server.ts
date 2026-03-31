@@ -2,22 +2,15 @@ import http from 'http';
 import { URL } from 'url';
 import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
-import { createHmac, timingSafeEqual } from 'crypto';
-import jwt from 'jsonwebtoken';
 import type { MemoryStore } from '../core/storage/index.js';
 import type { PluginBus } from '../core/plugin-bus.js';
 import type { Agent } from '../core/agent.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { Logger } from '../core/logger.js';
-
-// ─── Auth Config ──────────────────────────────────────────────────────────────
-const DASHBOARD_USER = process.env['DASHBOARD_USER'] || 'admin';
-const DASHBOARD_PASSWORD = process.env['DASHBOARD_PASSWORD'] || 'aura2026';
-const JWT_SECRET = process.env['JWT_SECRET'] || createHmac('sha256', 'aura-default').update(DASHBOARD_PASSWORD).digest('hex');
-const JWT_EXPIRY = '7d';
+import { AuthManager } from './auth.js';
 
 // Public paths that don't require auth
-const PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/check']);
+const PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/register', '/api/auth/check']);
 
 interface DashboardConfig { port: number; host: string; }
 
@@ -28,6 +21,7 @@ export class Dashboard {
   private agent: Agent;
   private scheduler: Scheduler;
   private log: Logger;
+  private auth: AuthManager;
 
   constructor(config: DashboardConfig, storage: MemoryStore, plugins: PluginBus, agent: Agent, scheduler: Scheduler, logger: Logger) {
     this.storage = storage;
@@ -35,6 +29,7 @@ export class Dashboard {
     this.agent = agent;
     this.scheduler = scheduler;
     this.log = logger;
+    this.auth = new AuthManager(storage.sqlite);
     this.server = http.createServer((req, res) => this.handle(req, res));
     this.server.listen(config.port, config.host, () => {
       this.log.info(`Dashboard running at http://${config.host}:${config.port}`);
@@ -50,53 +45,73 @@ export class Dashboard {
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
     try {
-      // ── Login endpoint ────────────────────────────────────────────────────
-      if (p === '/api/auth/login' && req.method === 'POST') {
-        const body = await this.body(req) as { username?: string; password?: string };
-        const userOk = body.username === DASHBOARD_USER;
-        const passOk = (() => {
-          try {
-            const a = Buffer.from(body.password ?? '');
-            const b = Buffer.from(DASHBOARD_PASSWORD);
-            return a.length === b.length && timingSafeEqual(a, b);
-          } catch { return false; }
-        })();
-        if (userOk && passOk) {
-          const token = jwt.sign({ user: DASHBOARD_USER, role: 'admin' }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
-          return this.json(res, { ok: true, token, user: DASHBOARD_USER });
-        }
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: false, error: 'Invalid credentials' }));
-        return;
+      // ── Register ─────────────────────────────────────────────────────────
+      if (p === '/api/auth/register' && req.method === 'POST') {
+        const { username, password, email } = await this.body(req);
+        const result = await this.auth.register(
+          String(username ?? ''), String(password ?? ''), email ? String(email) : undefined
+        );
+        if (!result.ok) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(result)); return; }
+        return this.json(res, result);
       }
 
-      // ── Auth check (validate existing token) ──────────────────────────────
+      // ── Login ────────────────────────────────────────────────────────────
+      if (p === '/api/auth/login' && req.method === 'POST') {
+        const { username, password } = await this.body(req);
+        const result = await this.auth.login(String(username ?? ''), String(password ?? ''));
+        if (!result.ok) { res.writeHead(401, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(result)); return; }
+        return this.json(res, result);
+      }
+
+      // ── Auth check ───────────────────────────────────────────────────────
       if (p === '/api/auth/check') {
         const token = this.extractToken(req);
         if (!token) { res.writeHead(401); res.end(JSON.stringify({ ok: false })); return; }
-        try {
-          const payload = jwt.verify(token, JWT_SECRET) as { user: string; role: string };
-          return this.json(res, { ok: true, user: payload.user, role: payload.role });
-        } catch {
-          res.writeHead(401); res.end(JSON.stringify({ ok: false, error: 'Token expired or invalid' })); return;
-        }
+        const payload = this.auth.verify(token);
+        if (!payload) { res.writeHead(401); res.end(JSON.stringify({ ok: false, error: 'Token expired' })); return; }
+        // Also return whether registration is needed (no users yet)
+        const needsSetup = this.auth.getUserCount() === 0;
+        return this.json(res, { ok: true, user: payload.username, role: payload.role, needsSetup });
       }
 
-      // ── Auth middleware: protect all /api/* except public paths ──────────
+      // ── Auth middleware ───────────────────────────────────────────────────
       if (p.startsWith('/api') && !PUBLIC_PATHS.has(p)) {
         const token = this.extractToken(req);
         if (!token) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Unauthorized — login required' }));
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
           return;
         }
-        try {
-          jwt.verify(token, JWT_SECRET);
-        } catch {
+        const payload = this.auth.verify(token);
+        if (!payload) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Token expired — please login again' }));
           return;
         }
+      }
+
+      // ── User management (owner only) ──────────────────────────────────────
+      if (p === '/api/auth/users' && req.method === 'GET') {
+        const token = this.extractToken(req)!;
+        const me = this.auth.verify(token)!;
+        if (me.role !== 'owner') { res.writeHead(403); res.end(JSON.stringify({ error: 'Forbidden' })); return; }
+        return this.json(res, this.auth.listUsers());
+      }
+
+      if (p.startsWith('/api/auth/users/') && req.method === 'DELETE') {
+        const token = this.extractToken(req)!;
+        const me = this.auth.verify(token)!;
+        const userId = p.split('/').pop()!;
+        return this.json(res, this.auth.deleteUser(userId, me.role));
+      }
+
+      if (p === '/api/auth/change-password' && req.method === 'POST') {
+        const token = this.extractToken(req)!;
+        const me = this.auth.verify(token)!;
+        const { oldPassword, newPassword } = await this.body(req);
+        const result = await this.auth.changePassword(me.id, String(oldPassword ?? ''), String(newPassword ?? ''));
+        if (!result.ok) { res.writeHead(400); res.end(JSON.stringify(result)); return; }
+        return this.json(res, result);
       }
 
       // Serve React dashboard (static files)

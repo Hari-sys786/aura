@@ -1,105 +1,122 @@
 .page {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  padding: 20px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 20px;
 }
 
 .card {
-  width: 100%;
-  max-width: 380px;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 36px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  width: 100%; max-width: 400px;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 16px; padding: 32px 28px;
+  display: flex; flex-direction: column; gap: 16px;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
-}
+.logo { display: flex; align-items: center; gap: 12px; }
 .logoIcon {
-  width: 44px; height: 44px; border-radius: 12px;
-  background: var(--accent);
+  width: 46px; height: 46px; border-radius: 14px;
+  background: var(--accent); color: #000;
   display: flex; align-items: center; justify-content: center;
-  color: #000;
+  flex-shrink: 0;
 }
-.logoText { display: flex; flex-direction: column; }
-.appName { font-size: 20px; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+.appName { font-size: 22px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
 .appSub { font-size: 12px; color: var(--text-muted); }
 
-.title { font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0; }
-.subtitle { font-size: 13px; color: var(--text-muted); margin: 0 0 20px; }
-
-.form { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
-
-.field { display: flex; flex-direction: column; gap: 6px; }
-.label { font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-
-.passWrap { position: relative; }
-.input {
-  width: 100%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 14px;
+.setupBanner {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--accent)1a; border: 1px solid var(--accent)33;
+  border-radius: 10px; padding: 12px 14px;
   color: var(--text-primary);
-  outline: none;
-  font-family: var(--font-sans);
-  transition: border-color 0.15s;
-  box-sizing: border-box;
+  font-size: 13px;
+}
+
+/* Tabs */
+.tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
+.tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px; border-radius: 8px; border: none; background: transparent;
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s;
+}
+.tab:hover { color: var(--text-primary); }
+.activeTab { background: var(--surface-1) !important; color: var(--text-primary) !important; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+/* Form */
+.form { display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.inputWrap { position: relative; display: flex; align-items: center; }
+.inputIcon { position: absolute; left: 12px; color: var(--text-muted); pointer-events: none; flex-shrink: 0; }
+.input {
+  width: 100%; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px 10px 36px;
+  font-size: 14px; color: var(--text-primary); outline: none;
+  font-family: var(--font-sans); transition: border-color 0.15s; box-sizing: border-box;
 }
 .input:focus { border-color: var(--accent); }
 .input::placeholder { color: var(--text-muted); }
-.passWrap .input { padding-right: 40px; }
 
 .eyeBtn {
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  background: transparent; border: none; cursor: pointer;
-  color: var(--text-muted); display: flex; align-items: center;
-  transition: color 0.15s;
+  position: absolute; right: 10px; background: transparent; border: none;
+  cursor: pointer; color: var(--text-muted); display: flex; align-items: center;
+  transition: color 0.15s; padding: 4px;
 }
 .eyeBtn:hover { color: var(--text-primary); }
 
+/* Password strength */
+.strengthBar {
+  display: flex; align-items: center; gap: 8px;
+}
+.strengthBar::before { content: ''; display: block; flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; position: relative; }
+.strengthFill {
+  /* Can't use ::before fill trick in CSS modules, JS handles this via inline style in the parent div */
+  height: 3px; border-radius: 2px; transition: all 0.3s;
+  position: absolute; left: 0; top: 0;
+}
+/* Override: use a wrapper approach */
+.strengthBar {
+  background: var(--border);
+  height: 3px; border-radius: 2px;
+  overflow: hidden; position: relative;
+  margin: -4px 0 4px;
+}
+.strengthFill { height: 100%; border-radius: 2px; transition: all 0.3s; position: absolute; left: 0; top: 0; }
+/* Fix: label next to bar */
+.strengthBar + span { font-size: 11px; }
+
 .error {
-  background: #ef44441a;
-  border: 1px solid #ef444433;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  color: var(--error);
+  background: #ef44441a; border: 1px solid #ef444433;
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 13px; color: var(--error);
 }
 
 .submitBtn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; padding: 12px;
-  border-radius: 8px; border: none;
+  width: 100%; padding: 12px; border-radius: 8px; border: none;
   background: var(--accent); color: #000;
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-  margin-top: 4px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s; margin-top: 4px;
 }
 .submitBtn:hover:not(:disabled) { opacity: 0.9; }
 .submitBtn:active:not(:disabled) { transform: scale(0.98); }
-.submitBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.submitBtn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .spinner {
   width: 16px; height: 16px; border-radius: 50%;
-  border: 2px solid #00000033;
-  border-top-color: #000;
+  border: 2px solid #00000033; border-top-color: #000;
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.footer {
-  font-size: 11px; color: var(--text-muted);
-  text-align: center; margin-top: 12px;
+.switchMode {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 13px; color: var(--text-muted);
 }
+.switchBtn {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--accent); font-size: 13px; font-weight: 600;
+  transition: opacity 0.15s;
+}
+.switchBtn:hover { opacity: 0.8; }
+
+.footer { font-size: 12px; color: var(--text-muted); text-align: center; }

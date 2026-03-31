@@ -18,11 +18,12 @@ export default function App() {
 
   useEffect(() => {
     if (!token) { setChecking(false); return }
-    // Verify token is still valid
     fetch('/api/auth/check', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => {
         if (!d.ok) { localStorage.removeItem('aura_token'); setToken(null) }
+        // First run — show register
+        if (d.needsSetup) { localStorage.removeItem('aura_token'); setToken(null) }
       })
       .catch(() => { localStorage.removeItem('aura_token'); setToken(null) })
       .finally(() => setChecking(false))
