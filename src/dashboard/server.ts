@@ -60,9 +60,106 @@ export class Dashboard {
       if (p === '/api/status') return this.json(res, await this.status());
       if (p === '/api/plugins') return this.json(res, this.plugins.listPlugins());
       if (p === '/api/emails') return this.json(res, this.data('emails', +(url.searchParams.get('limit') ?? 30)));
-      if (p === '/api/calendar') return this.json(res, this.data('calendar-events', 30));
-      if (p === '/api/transactions') return this.json(res, this.data('transactions', 50));
+      if (p === '/api/calendar') {
+        const events = this.data('calendar-events', 100);
+        const now = new Date().toISOString();
+        const upcoming = events.filter((e: any) => (e.end || e.start) >= now);
+        return this.json(res, upcoming.slice(0, 30));
+      }
+      if (p === '/api/transactions') return this.json(res, this.data('transactions', +(url.searchParams.get('limit') ?? 200)));
+
+      // ── Finance Query API (for Alexa, Google Assistant, future voice integrations) ──
+      if (p === '/api/finance/query' && req.method === 'POST') {
+        const body = await this.body(req) as { query?: string; intent?: string; params?: Record<string, string> };
+        const txs = this.data('transactions', 500) as Array<Record<string, unknown>>;
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        const q = (body.query || '').toLowerCase();
+        const intent = body.intent;
+
+        // Natural language finance queries
+        let result: Record<string, unknown> = {};
+
+        // "How much did I spend this month?"
+        if (intent === 'monthly_spend' || /spend.*month|month.*spend|this month/i.test(q)) {
+          const total = txs.filter((t: any) => t.type === 'debit' && t.date >= monthStart)
+            .reduce((s: number, t: any) => s + (t.amount || 0), 0);
+          result = { intent: 'monthly_spend', amount: total, currency: 'INR',
+            answer: `You spent ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 0 })} this month` };
+        }
+        // "What did I spend on food?"
+        else if (intent === 'category_spend' || /spend.*on\s+(\w+)|(\w+)\s+spend/i.test(q)) {
+          const catMatch = q.match(/spend.*on\s+(\w+)|(\w+)\s+spend|(\w+)\s+expense/i);
+          const cat = catMatch?.[1] || catMatch?.[2] || catMatch?.[3] || body.params?.category;
+          if (cat) {
+            const total = txs.filter((t: any) => t.type === 'debit' && t.category?.toLowerCase().includes(cat.toLowerCase()))
+              .reduce((s: number, t: any) => s + (t.amount || 0), 0);
+            result = { intent: 'category_spend', category: cat, amount: total, currency: 'INR',
+              answer: `You spent ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 0 })} on ${cat}` };
+          }
+        }
+        // "What's my biggest expense?"
+        else if (intent === 'biggest_expense' || /biggest|largest|highest|most expensive/i.test(q)) {
+          const top = [...txs].filter((t: any) => t.type === 'debit').sort((a: any, b: any) => (b.amount || 0) - (a.amount || 0))[0] as any;
+          if (top) result = { intent: 'biggest_expense', transaction: top,
+            answer: `Your biggest expense is ₹${(top.amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} to ${top.merchant || 'unknown'} for ${top.category}` };
+        }
+        // "Show my recent transactions"
+        else if (intent === 'recent' || /recent|latest|last.*transaction/i.test(q)) {
+          const recent = txs.slice(0, 5);
+          result = { intent: 'recent', transactions: recent,
+            answer: `Your last ${recent.length} transactions: ${(recent as any[]).map((t: any) => `${t.type === 'debit' ? '-' : '+'}₹${(t.amount || 0).toFixed(0)} ${t.merchant || t.category}`).join(', ')}` };
+        }
+        // "How much did I spend this week?"
+        else if (intent === 'weekly_spend' || /this week|week.*spend/i.test(q)) {
+          const total = txs.filter((t: any) => t.type === 'debit' && t.date >= weekStart)
+            .reduce((s: number, t: any) => s + (t.amount || 0), 0);
+          result = { intent: 'weekly_spend', amount: total, currency: 'INR',
+            answer: `You spent ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 0 })} this week` };
+        }
+        // Summary
+        else {
+          const totalDebit = txs.filter((t: any) => t.type === 'debit').reduce((s: number, t: any) => s + (t.amount || 0), 0);
+          const totalCredit = txs.filter((t: any) => t.type === 'credit').reduce((s: number, t: any) => s + (t.amount || 0), 0);
+          const thisMonth = txs.filter((t: any) => t.type === 'debit' && t.date >= monthStart).reduce((s: number, t: any) => s + (t.amount || 0), 0);
+          const categories = [...new Map(txs.filter((t: any) => t.type === 'debit').map((t: any) => [t.category, t])).values()];
+          result = { intent: 'summary', totalDebit, totalCredit, thisMonth, topCategories: categories.slice(0, 5),
+            answer: `Total spent: ₹${totalDebit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}. This month: ₹${thisMonth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` };
+        }
+
+        return this.json(res, result);
+      }
       if (p === '/api/documents') return this.json(res, this.data('documents', 50));
+
+      // Bills with due dates extracted from email
+      if (p === '/api/bills') {
+        const emails = this.data('emails', 500) as Array<Record<string, unknown>>;
+        const bills = emails
+          .filter((e: any) => e.category === 'bill' && e.extractedData)
+          .map((e: any) => ({
+            id: e.id,
+            vendor: e.extractedData?.vendor || e.fromName || 'Unknown',
+            subject: e.subject,
+            amount: e.extractedData?.amount || 0,
+            minimumDue: e.extractedData?.minimumDue,
+            currency: e.extractedData?.currency || 'INR',
+            dueDate: e.extractedData?.dueDate || '',
+            billType: e.extractedData?.billType || 'other',
+            cardLast4: e.extractedData?.cardLast4,
+            date: e.date,
+            accountId: e.accountId,
+          }))
+          .sort((a: any, b: any) => {
+            // Sort by due date (soonest first)
+            if (!a.dueDate && !b.dueDate) return 0;
+            if (!a.dueDate) return 1;
+            if (!b.dueDate) return -1;
+            return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          });
+        return this.json(res, bills);
+      }
       if (p === '/api/subscriptions') return this.json(res, this.data('subscriptions', 50));
       if (p === '/api/audit') return this.json(res, this.storage.sqlite.auditQuery({ limit: 50 }));
       if (p === '/api/cache') return this.json(res, this.storage.cache.stats());

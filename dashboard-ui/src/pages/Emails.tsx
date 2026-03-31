@@ -10,7 +10,7 @@ import styles from './Emails.module.css'
 const CATEGORY_COLORS: Record<string, string> = {
   work: 'tag-blue',
   personal: 'tag-green',
-  finance: 'tag-amber',
+  finance: 'tag-green',
   spam: 'tag-red',
   newsletter: 'tag-muted',
   notification: 'tag-muted',
@@ -80,7 +80,14 @@ export default function Emails() {
             <div className={styles.th} style={{ textAlign: 'right' }}>Date</div>
           </div>
           {filtered.map(email => (
-            <div key={email.id} className={styles.row}>
+            <a
+              key={email.id}
+              className={styles.row}
+              href={`https://mail.google.com/mail/u/0/#inbox/${email.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: 'none', color: 'inherit' }}
+            >
               <div className={styles.sender}>
                 <span className={styles.senderName}>{email.fromName || email.from}</span>
                 <span className={styles.senderEmail}>{email.from}</span>
@@ -94,7 +101,7 @@ export default function Emails() {
               <div className={styles.date}>
                 {email.date ? format(new Date(email.date), 'MMM d') : '—'}
               </div>
-            </div>
+            </a>
           ))}
         </div>
       )}

@@ -7,6 +7,7 @@ export interface PluginContext {
   logger: Logger;
   config: Record<string, unknown>;
   emit: (event: string, data: unknown) => void;
+  on: (event: string, handler: (...args: unknown[]) => void) => void;
   schedule: (cronExpr: string, handler: () => void | Promise<void>) => string;
   notify: (message: string, options?: NotifyOptions) => Promise<void>;
 }
@@ -77,6 +78,7 @@ export class PluginBus {
       logger: this.log.child({ module: `plugin:${plugin.name}` }),
       config: pluginConfig,
       emit: (event: string, data: unknown) => this.emit(`${plugin.name}:${event}`, data),
+      on: (event: string, handler: (...args: unknown[]) => void) => this.on(event, handler),
       schedule: (cronExpr: string, handler: () => void | Promise<void>) => {
         if (!this.scheduleHandler) throw new Error('Scheduler not initialized');
         return this.scheduleHandler(cronExpr, handler);

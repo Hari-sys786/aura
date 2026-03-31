@@ -73,12 +73,32 @@ async function main(): Promise<void> {
 
     const emailPlugin = new EmailPlugin();
     await plugins.register(emailPlugin, {
-      provider: 'gmail',
-      gmail: {
-        clientId: config.google.clientId,
-        clientSecret: config.google.clientSecret,
-        refreshToken: config.google.refreshToken,
-      },
+      accounts: [
+        {
+          id: 'primary',
+          label: 'Primary Gmail',
+          purpose: 'personal',
+          provider: 'gmail',
+          gmail: {
+            clientId: config.google.clientId,
+            clientSecret: config.google.clientSecret,
+            refreshToken: config.google.refreshToken,
+          },
+          enabled: true,
+        },
+        {
+          id: 'secondary',
+          label: 'Hari Gmail',
+          purpose: 'personal',
+          provider: 'gmail',
+          gmail: {
+            clientId: config.google.clientId,
+            clientSecret: config.google.clientSecret,
+            refreshToken: process.env.GOOGLE_REFRESH_TOKEN_2 || '',
+          },
+          enabled: true,
+        },
+      ],
     });
     await plugins.activate('email');
   } else {

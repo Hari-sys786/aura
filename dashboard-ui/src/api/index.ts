@@ -64,6 +64,10 @@ export interface Transaction {
   type: string
   category: string
   merchant: string
+  description?: string
+  source?: string
+  reference?: string
+  tags?: string[]
   date: string
 }
 

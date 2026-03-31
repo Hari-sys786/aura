@@ -64,7 +64,22 @@ export class FinancePlugin implements AuraPlugin {
       ...ctx.config as Record<string, unknown>,
     } as FinanceConfig;
 
-    // Listen for bill emails from email plugin
+    // Listen for finance transaction events from email plugin
+    // Email plugin emits as "email:finance:transaction" (prefixed by plugin bus)
+    ctx.on('email:finance:transaction', (data: unknown) => {
+      const tx = data as Omit<Transaction, 'id'>;
+      // Deduplicate by reference (messageId)
+      if (tx.reference) {
+        const existing = this.getTransactions();
+        if (existing.some(e => e.reference === tx.reference)) {
+          ctx.logger.info(`Skipping duplicate transaction: ${tx.reference}`);
+          return;
+        }
+      }
+      this.addTransaction(tx);
+      ctx.logger.info(`Auto-tracked from email: ${tx.type} ${tx.currency} ${tx.amount} — ${tx.description}`);
+    });
+
     ctx.logger.info('Finance plugin loaded');
   }
 
