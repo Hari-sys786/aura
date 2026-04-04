@@ -21,12 +21,35 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 const PAGE_SIZE = 25
-const toIST = (d: string) => new Date(new Date(d).getTime() + 5.5 * 60 * 60 * 1000)
+/** Format date in IST regardless of browser timezone */
+const fmtIST = (d: string, opts?: Intl.DateTimeFormatOptions) => {
+  if (!d) return '—'
+  const defaults: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }
+  return new Intl.DateTimeFormat('en-IN', opts || defaults).format(new Date(d))
+}
+const fmtISTMonth = (d: string) => {
+  const dt = new Date(d)
+  // Get year-month in IST
+  const parts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit' }).formatToParts(dt)
+  const y = parts.find(p => p.type === 'year')?.value
+  const m = parts.find(p => p.type === 'month')?.value
+  return y && m ? `${y}-${m}` : ''
+}
+const fmtISTMonthLabel = (ym: string) => {
+  const dt = new Date(ym + '-15')  // mid-month to avoid edge issues
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', year: '2-digit' }).format(dt)
+}
+const currentISTMonth = () => {
+  const parts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit' }).formatToParts(new Date())
+  const y = parts.find(p => p.type === 'year')?.value
+  const m = parts.find(p => p.type === 'month')?.value
+  return y && m ? `${y}-${m}` : ''
+}
 
 export default function Emails() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<string | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState(() => format(toIST(new Date().toISOString()), 'yyyy-MM'))
+  const [selectedMonth, setSelectedMonth] = useState(() => currentISTMonth())
   const [page, setPage] = useState(1)
 
   const { data: emails, isLoading } = useQuery({
@@ -38,15 +61,15 @@ export default function Emails() {
   const availableMonths = useMemo(() => {
     const months = new Set<string>()
     // Always include current month
-    months.add(format(toIST(new Date().toISOString()), 'yyyy-MM'))
+    months.add(currentISTMonth())
     // Add all months that have actual data
     if (emails) {
       emails.forEach(e => {
-        if (e.date) months.add(format(toIST(e.date), 'yyyy-MM'))
+        if (e.date) months.add(fmtISTMonth(e.date))
       })
     }
     // Only past + current months, never future
-    const currentMonth = format(toIST(new Date().toISOString()), 'yyyy-MM')
+    const currentMonth = currentISTMonth()
     return [...months].filter(m => m <= currentMonth).sort((a, b) => b.localeCompare(a))
   }, [emails])
 
@@ -57,7 +80,7 @@ export default function Emails() {
     const counts = new Map<string, number>()
     emails.forEach(e => {
       if (e.date) {
-        const m = format(toIST(e.date), 'yyyy-MM')
+        const m = fmtISTMonth(e.date)
         counts.set(m, (counts.get(m) ?? 0) + 1)
       }
     })
@@ -69,7 +92,7 @@ export default function Emails() {
   // Filter by month
   const monthEmails = useMemo(() => {
     if (!emails) return []
-    return emails.filter(e => e.date && format(toIST(e.date), 'yyyy-MM') === selectedMonth)
+    return emails.filter(e => e.date && fmtISTMonth(e.date) === selectedMonth)
   }, [emails, selectedMonth])
 
   const categories = useMemo(() => {
@@ -94,7 +117,7 @@ export default function Emails() {
   useEffect(() => { setPage(1) }, [search, filter, selectedMonth])
 
   const selectedMonthLabel = availableMonths.length
-    ? format(new Date(selectedMonth + '-01'), 'MMMM yyyy')
+    ? fmtISTMonthLabel(selectedMonth)
     : selectedMonth
 
   if (isLoading) return <PageLoader />
@@ -117,7 +140,7 @@ export default function Emails() {
               fontWeight: selectedMonth === m ? 600 : 400,
             }}
             onClick={() => setSelectedMonth(m)}>
-            {format(new Date(m + '-01'), 'MMM yy')}
+            {fmtISTMonthLabel(m)}
           </button>
         ))}
         <ChevronRight size={16} style={{ cursor: 'pointer', opacity: 0.5 }}
@@ -184,7 +207,7 @@ export default function Emails() {
                   </span>
                 </div>
                 <div className={styles.date}>
-                  {email.date ? format(toIST(email.date), 'MMM d, h:mm a') : '—'}
+                  {email.date ? fmtIST(email.date) : '—'}
                 </div>
               </a>
             ))}

@@ -33,6 +33,32 @@ const colorFor = (cat: string, idx: number) =>
 
 const PAGE_SIZE = 20
 
+/** Format date in IST regardless of browser timezone */
+const fmtIST = (d: string, opts?: Intl.DateTimeFormatOptions) => {
+  if (!d) return '—'
+  const defaults: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }
+  return new Intl.DateTimeFormat('en-IN', opts || defaults).format(new Date(d))
+}
+const fmtISTMonth = (d: string) => {
+  const dt = new Date(d)
+  // Get year-month in IST
+  const parts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit' }).formatToParts(dt)
+  const y = parts.find(p => p.type === 'year')?.value
+  const m = parts.find(p => p.type === 'month')?.value
+  return y && m ? `${y}-${m}` : ''
+}
+const fmtISTMonthLabel = (ym: string) => {
+  const dt = new Date(ym + '-15')  // mid-month to avoid edge issues
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', year: '2-digit' }).format(dt)
+}
+const currentISTMonth = () => {
+  const parts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit' }).formatToParts(new Date())
+  const y = parts.find(p => p.type === 'year')?.value
+  const m = parts.find(p => p.type === 'month')?.value
+  return y && m ? `${y}-${m}` : ''
+}
+
+
 /** Detect payment method from transaction data */
 function detectPaymentMethod(tx: any): string {
   // Use stored paymentMethod if available (parsed from email body)
@@ -115,7 +141,7 @@ export default function Finance() {
   const [filterMethod, setFilterMethod] = useState('all')
   const [chartMode, setChartMode] = useState<'bar' | 'area' | 'pie'>('bar')
   const [page, setPage] = useState(1)
-  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'))
+  const [selectedMonth, setSelectedMonth] = useState(() => currentISTMonth())
   const [monthInitialized, setMonthInitialized] = useState(false)
 
   const { data: transactions = [], isLoading } = useQuery({
@@ -124,17 +150,16 @@ export default function Finance() {
   })
 
   // ── Derive available months from all transactions (IST) ───────────────────
-  const toIST = (d: string) => new Date(new Date(d).getTime() + 5.5*60*60*1000)
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>()
     // Always include current month
-    monthSet.add(format(toIST(new Date().toISOString()), 'yyyy-MM'))
+    monthSet.add(currentISTMonth())
     // Add all months that have actual data
     for (const t of transactions) {
-      if (t.date) monthSet.add(format(toIST(t.date), 'yyyy-MM'))
+      if (t.date) monthSet.add(fmtISTMonth(t.date))
     }
     // Only past + current months, never future
-    const currentMonth = format(toIST(new Date().toISOString()), 'yyyy-MM')
+    const currentMonth = currentISTMonth()
     return [...monthSet].filter(m => m <= currentMonth).sort((a, b) => b.localeCompare(a))
   }, [transactions])
 
@@ -145,7 +170,7 @@ export default function Finance() {
     const countMap = new Map<string, number>()
     for (const t of transactions) {
       if (!t.date) continue
-      const m = format(toIST(t.date), 'yyyy-MM')
+      const m = fmtISTMonth(t.date)
       countMap.set(m, (countMap.get(m) ?? 0) + 1)
     }
     // Pick month with most transactions
@@ -158,8 +183,7 @@ export default function Finance() {
   const monthTransactions = useMemo(() => {
     return transactions.filter(t => {
       if (!t.date) return false
-      const istDate = new Date(new Date(t.date).getTime() + 5.5*60*60*1000)
-      return format(istDate, 'yyyy-MM') === selectedMonth
+      return fmtISTMonth(t.date) === selectedMonth
     })
   }, [transactions, selectedMonth])
 
@@ -185,8 +209,8 @@ export default function Finance() {
     for (const t of monthTransactions) {
       const isDebit = t.type === 'debit'
       const amt = Math.abs(t.amount ?? 0)
-      const date = toIST(t.date)
-      const dayKey = format(date, 'd')  // just day number within month
+      const date = new Date(t.date)
+      const dayKey = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric' }).format(date)  // just day number within month
 
       if (isDebit) {
         totalDebit += amt
@@ -232,7 +256,7 @@ export default function Finance() {
       if (t.category !== filterCat) continue
       const isDebit = t.type === 'debit'
       const amt = Math.abs(t.amount ?? 0)
-      const dayKey = format(toIST(t.date), 'd')
+      const dayKey = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric' }).format(new Date(t.date))
       const entry = dayMap.get(dayKey) ?? { debit: 0, credit: 0 }
       if (isDebit) entry.debit += amt
       else entry.credit += amt
@@ -289,7 +313,7 @@ export default function Finance() {
   if (!transactions.length) return <EmptyState icon={DollarSign} title="No transactions" description="Transactions will appear here once emails are synced" />
 
   const selectedMonthLabel = availableMonths.length
-    ? format(new Date(selectedMonth + '-01'), 'MMMM yyyy')
+    ? fmtISTMonthLabel(selectedMonth)
     : ''
 
   return (
@@ -308,7 +332,7 @@ export default function Finance() {
               className={`${styles.monthTab} ${selectedMonth === m ? styles.activeMonthTab : ''}`}
               onClick={() => { setSelectedMonth(m); setPage(1); setFilterCat('all'); setFilterType('all'); setSearch('') }}
             >
-              {format(new Date(m + '-01'), 'MMM yy')}
+              {fmtISTMonthLabel(m)}
             </button>
           ))}
         </div>
@@ -536,7 +560,7 @@ export default function Finance() {
                   }
                 </div>
                 <div className={styles.date}>
-                  {tx.date ? format(new Date(new Date(tx.date).getTime() + 5.5*60*60*1000), 'MMM d, h:mm a') : '—'}
+                  {tx.date ? fmtIST(tx.date) : '—'}
                 </div>
               </div>
             )
