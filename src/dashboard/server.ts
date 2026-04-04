@@ -11,7 +11,7 @@ import type { Logger } from '../core/logger.js';
 import { AuthManager } from './auth.js';
 
 // Public paths that don't require auth
-const PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/register', '/api/auth/check', '/api/alexa', '/api/google-home']);
+const PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/register', '/api/auth/check', '/api/alexa', '/api/google-home', '/api/chat/stream']);
 
 interface DashboardConfig { port: number; host: string; }
 
@@ -310,6 +310,82 @@ RULES:
         const response = await this.agent.processMessage(msg, { channel: 'dashboard' });
         return this.json(res, { response });
       }
+
+      // Streaming chat endpoint for voice page — SSE
+      if (p === '/api/chat/stream' && req.method === 'POST') {
+        const { message } = await this.body(req) as { message?: string };
+        const msg = message as string;
+        if (!msg) { res.writeHead(400); res.end('message required'); return; }
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        });
+
+        try {
+          const pluginData = this.alexaAi ? await this.agent.fetchPluginData(msg) : null;
+          const userContent = pluginData ? `${msg}\n\n[Data]\n${pluginData}` : msg;
+          const { todayIST } = await import('../core/timezone.js');
+          const ai = this.alexaAi ?? (this.agent as any).ai;
+
+          // Use fetch streaming to NVIDIA API directly
+          const apiKey = process.env['AI_API_KEY'] || process.env['NVIDIA_API_KEY'] || '';
+          const model = process.env['ALEXA_AI_MODEL'] || 'qwen/qwen2.5-7b-instruct';
+          const baseUrl = process.env['AI_BASE_URL'] || 'https://integrate.api.nvidia.com/v1';
+
+          const apiRes = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: 'system', content: `You are Aura — a warm, caring personal AI who talks like a close friend.
+Talk naturally. Keep responses under 3 sentences. No markdown. No bullet points.
+Never say "I'm just an AI." You care about the user.
+Today is ${todayIST()} IST.` },
+                { role: 'user', content: userContent },
+              ],
+              max_tokens: 300, temperature: 0.7, stream: true,
+            }),
+          });
+
+          if (!apiRes.ok || !apiRes.body) {
+            res.write(`data: ${JSON.stringify({ error: 'AI unavailable' })}\n\n`);
+            res.end();
+            return;
+          }
+
+          const reader = apiRes.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') { res.write('data: [DONE]\n\n'); continue; }
+              try {
+                const parsed = JSON.parse(data);
+                const token = parsed.choices?.[0]?.delta?.content;
+                if (token) res.write(`data: ${JSON.stringify({ token })}\n\n`);
+              } catch { /* skip malformed */ }
+            }
+          }
+          res.write('data: [DONE]\n\n');
+        } catch (err) {
+          res.write(`data: ${JSON.stringify({ error: String(err) })}\n\n`);
+        }
+        res.end();
+        return;
+      }
+
       this.json(res, { error: 'Not found' }, 404);
     } catch (err) { this.log.error(`Dashboard: ${err}`); this.json(res, { error: String(err) }, 500); }
   }
