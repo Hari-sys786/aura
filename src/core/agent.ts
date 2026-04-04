@@ -3,6 +3,7 @@ import type { MemoryStore } from './storage/index.js';
 import type { PluginBus } from './plugin-bus.js';
 import type { Scheduler } from './scheduler.js';
 import type { Logger } from './logger.js';
+import { todayIST, monthIST, toISTDate, toISTDateTime } from './timezone.js';
 
 export interface AgentContext {
   ai: AiAdapter;
@@ -37,6 +38,7 @@ export class Agent {
 When the user asks about emails, calendar, finances, or briefings — you have REAL access to their data through plugins.
 
 IMPORTANT: You will receive plugin data in your context when relevant. Use it to answer directly. Never say "I can't access" — if a plugin is active, you CAN access the data.
+TIMEZONE: The user is in IST (India Standard Time, UTC+5:30). All dates and times in responses must be in IST. Today is ${todayIST()} IST.
 
 Commands you support:
 - Email: list emails, show bills, show newsletters, check unread
@@ -146,13 +148,11 @@ Be concise. Answer with actual data, not instructions.`;
           const emails = this.storage.sqlite.list('emails');
           if (emails.length > 0) {
             // Sort by date descending and show most recent, with IST date
+            
             const parsed = emails.map(e => JSON.parse(e.value))
               .sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
             const classified = parsed.slice(0, 15).map((val: any) => {
-              const utcDate = new Date(val.date || 0);
-              const istDate = new Date(utcDate.getTime() + 5.5 * 60 * 60 * 1000);
-              const dateStr = istDate.toISOString().slice(0, 16).replace('T', ' ') + ' IST';
-              return `- [${val.category}] From: ${val.fromName} | Subject: ${val.subject} | ${dateStr}`;
+              return `- [${val.category}] From: ${val.fromName} | Subject: ${val.subject} | ${toISTDateTime(val.date)}`;
             });
             parts.push(`Recent Emails (${emails.length} total, latest first):\n${classified.join('\n')}`);
           } else {
@@ -191,22 +191,14 @@ Be concise. Answer with actual data, not instructions.`;
         const allTransactions = this.storage.sqlite.list('transactions');
         if (allTransactions.length > 0) {
           // Get current IST date for filtering
-          const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-          const todayIST = nowIST.toISOString().slice(0, 10); // YYYY-MM-DD in IST
-          const monthIST = todayIST.slice(0, 7); // YYYY-MM
+          
+          const todayISTStr = todayIST();
+          const monthISTStr = monthIST();
 
           const parsed = allTransactions.map(t => ({ ...JSON.parse(t.value), _key: t.key }));
 
-          // Convert transaction dates to IST for comparison
-          const toISTDate = (d: string) => {
-            if (!d) return '';
-            const utc = new Date(d);
-            const ist = new Date(utc.getTime() + 5.5 * 60 * 60 * 1000);
-            return ist.toISOString().slice(0, 10);
-          };
-
-          const todayTxns = parsed.filter((v: any) => toISTDate(v.date) === todayIST);
-          const monthTxns = parsed.filter((v: any) => toISTDate(v.date)?.startsWith(monthIST));
+          const todayTxns = parsed.filter((v: any) => toISTDate(v.date) === todayISTStr);
+          const monthTxns = parsed.filter((v: any) => toISTDate(v.date)?.startsWith(monthISTStr));
 
           const todaySpent = todayTxns
             .filter((v: any) => v.type === 'debit')
@@ -219,7 +211,7 @@ Be concise. Answer with actual data, not instructions.`;
             `- ${v.type} ₹${v.amount} | ${v.merchant || v.description?.slice(0, 30)} (${v.category || 'uncategorized'}) | ${toISTDate(v.date)}`
           );
 
-          const summary = `Today (${todayIST} IST): ₹${todaySpent} spent across ${todayTxns.filter((v: any) => v.type === 'debit').length} transactions.\nThis month: ₹${monthSpent} spent across ${monthTxns.filter((v: any) => v.type === 'debit').length} transactions.`;
+          const summary = `Today (${todayISTStr} IST): ₹${todaySpent} spent across ${todayTxns.filter((v: any) => v.type === 'debit').length} transactions.\nThis month: ₹${monthSpent} spent across ${monthTxns.filter((v: any) => v.type === 'debit').length} transactions.`;
 
           if (todayTxns.length > 0) {
             parts.push(`Finance:\n${summary}\n\nToday's transactions:\n${recent.join('\n')}`);
@@ -304,9 +296,8 @@ Be concise. Answer with actual data, not instructions.`;
 
     // Add channel-specific instructions
     if (context?.channel === 'alexa') {
-      const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-      const todayIST = nowIST.toISOString().slice(0, 10);
-      parts.push(`\nIMPORTANT: This is a voice response for Alexa. Keep it SHORT (under 3 sentences). No markdown, no bullet lists, no special characters. Speak naturally. Numbers spoken plainly ("eight thousand" not "₹8,000"). Summarize don't itemize. User timezone is IST (UTC+5:30). Today's date in IST is ${todayIST}. Only report data matching TODAY's date. If no data for today, say "nothing so far today".`);
+      
+      parts.push(`\nIMPORTANT: This is a voice response for Alexa. Keep it SHORT (under 3 sentences). No markdown, no bullet lists, no special characters. Speak naturally. Numbers spoken plainly ("eight thousand" not "₹8,000"). Summarize don't itemize. User timezone is IST (UTC+5:30). Today's date in IST is ${todayIST()}. Only report data matching TODAY's date. If no data for today, say "nothing so far today".`);
     } else if (context) {
       parts.push(`\nContext: ${JSON.stringify(context)}`);
     }

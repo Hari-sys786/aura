@@ -35,7 +35,7 @@ export class Scheduler {
         }
       },
       start: true,
-      timeZone: 'UTC',
+      timeZone: 'Asia/Kolkata', // IST — all scheduled tasks run in user's timezone
     });
 
     this.tasks.set(id, { id, expression: cronExpr, job, handler, name });

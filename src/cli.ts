@@ -26,6 +26,7 @@ import { createAiAdapter } from './core/ai/index.js';
 import { Agent } from './core/agent.js';
 import { PluginBus } from './core/plugin-bus.js';
 import { Scheduler } from './core/scheduler.js';
+import { todayIST, monthIST } from './core/timezone.js';
 
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
@@ -231,7 +232,7 @@ async function showCalendar(): Promise<void> {
 
 async function showSpending(): Promise<void> {
   const { storage } = getStorage();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   const txns = storage.sqlite.list('transactions')
     .map(r => JSON.parse(r.value))
     .filter((t: { date: string; type: string }) => t.date?.startsWith(today) && t.type === 'debit');
@@ -252,7 +253,7 @@ async function showSpending(): Promise<void> {
 
 async function showSummary(): Promise<void> {
   const { storage } = getStorage();
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const monthStart = monthIST() + '-01T00:00:00.000Z';
   const txns = storage.sqlite.list('transactions').map(r => JSON.parse(r.value));
 
   const debits = txns.filter((t: { type: string; date: string }) => t.type === 'debit' && t.date >= monthStart);

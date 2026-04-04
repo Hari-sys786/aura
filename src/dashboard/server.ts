@@ -1,3 +1,4 @@
+import { todayIST, monthIST, nowIST } from '../core/timezone.js';
 import http from 'http';
 import { URL } from 'url';
 import { readFileSync, existsSync } from 'fs';
@@ -145,7 +146,7 @@ export class Dashboard {
       if (p === '/api/calendar') {
         if (!isOwner) return this.json(res, []);
         const events = this.data('calendar-events', 100);
-        const now = new Date().toISOString();
+        const now = nowIST().toISOString(); // IST
         const upcoming = events.filter((e: any) => (e.end || e.start) >= now);
         return this.json(res, upcoming.slice(0, 30));
       }
@@ -155,7 +156,7 @@ export class Dashboard {
       if (p === '/api/finance/query' && req.method === 'POST') {
         const body = await this.body(req) as { query?: string; intent?: string; params?: Record<string, string> };
         const txs = this.data('transactions', 500) as Array<Record<string, unknown>>;
-        const now = new Date();
+        const now = nowIST(); // IST
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
