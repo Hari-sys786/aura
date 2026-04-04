@@ -165,12 +165,12 @@
 /* ── Transaction Table ── */
 .txTable { overflow: hidden; }
 .txHead {
-  display: grid; grid-template-columns: 150px 1fr 100px 90px 65px;
+  display: grid; grid-template-columns: 130px 1fr 85px 85px 90px 120px;
   padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2);
 }
 .th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
 .txRow {
-  display: grid; grid-template-columns: 150px 1fr 100px 90px 65px;
+  display: grid; grid-template-columns: 130px 1fr 85px 85px 90px 120px;
   padding: 10px 16px; border-bottom: 1px solid var(--border);
   align-items: center; transition: background var(--transition);
 }
@@ -217,7 +217,13 @@
 .activeBtn { background: var(--accent) !important; color: #000 !important; border-color: var(--accent) !important; font-weight: 600; }
 
 @media (max-width: 768px) {
-  .txHead, .txRow { grid-template-columns: 1fr 80px 60px; }
+  /* Mobile: show Merchant | Amount | Date — hide Description, Category, Method */
+  .txHead, .txRow { grid-template-columns: 1fr 80px 100px; }
   .txHead > :nth-child(2), .txRow > :nth-child(2),
-  .txHead > :nth-child(3), .txRow > :nth-child(3) { display: none; }
+  .txHead > :nth-child(3), .txRow > :nth-child(3),
+  .txHead > :nth-child(4), .txRow > :nth-child(4) { display: none; }
+  .txHead { padding: 8px 12px; }
+  .txRow { padding: 10px 12px; }
+  .merchantName { font-size: 12px; }
+  .date { font-size: 10px; }
 }
