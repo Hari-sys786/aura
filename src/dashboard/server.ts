@@ -280,9 +280,22 @@ export class Dashboard {
         return this.json(res, { ok: true });
       }
       if (p === '/api/chat' && req.method === 'POST') {
-        const { message } = await this.body(req);
+        const { message, fast } = await this.body(req) as { message?: string; fast?: boolean };
         const msg = message as string;
         if (!msg) return this.json(res, { error: 'message required' }, 400);
+
+        // Fast mode: use Alexa's fast AI adapter if available (2-3s vs 10-15s)
+        if (fast && this.alexaAi) {
+          const pluginData = await this.agent.fetchPluginData(msg);
+          const userContent = pluginData ? `${msg}\n\n[Data]\n${pluginData}` : msg;
+          const { todayIST } = await import('../core/timezone.js');
+          const result = await this.alexaAi.chat([
+            { role: 'system', content: `You are Aura, a personal AI life manager. Be helpful, concise, and friendly. User timezone is IST. Today is ${todayIST()}.` },
+            { role: 'user', content: userContent },
+          ], { maxTokens: 500, temperature: 0.4 });
+          return this.json(res, { response: result.content, model: result.model, fast: true });
+        }
+
         const response = await this.agent.processMessage(msg, { channel: 'dashboard' });
         return this.json(res, { response });
       }

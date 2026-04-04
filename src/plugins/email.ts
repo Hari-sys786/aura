@@ -621,13 +621,42 @@ Rules:
     if (isActualTransaction) {
       const data = classified.extractedData as Record<string, unknown>;
       const amount = (data.amount as number) || 0;
+
+      // Parse payment method from email body
+      const bodyLower = email.bodyPlain.toLowerCase().slice(0, 1000);
+      let paymentMethod = '';
+      let merchantDetail = '';
+      if (bodyLower.includes('credit card')) {
+        paymentMethod = 'Credit Card';
+        const cardMatch = email.bodyPlain.match(/(?:Credit Card|card)\s+ending\s+(?:with\s+)?(\d{4})/i);
+        const bankMatch = email.bodyPlain.match(/(YES BANK|HDFC|SBI|ICICI|AXIS|KOTAK|IDFC|FEDERAL|AMEX|CITI)/i);
+        if (bankMatch && cardMatch) merchantDetail = `${bankMatch[1]} CC *${cardMatch[1]}`;
+      } else if (bodyLower.includes('debit card')) {
+        paymentMethod = 'Debit Card';
+        const cardMatch = email.bodyPlain.match(/(?:Debit Card|card)\s+ending\s+(?:with\s+)?(\d{4})/i);
+        if (cardMatch) merchantDetail = `Debit *${cardMatch[1]}`;
+      } else if (/\bupi\b|upi_|upi\//i.test(bodyLower)) {
+        paymentMethod = 'UPI';
+        const upiMatch = email.bodyPlain.match(/(?:UPI[_\/\s-])(\w+)/i);
+        if (upiMatch) merchantDetail = upiMatch[1];
+      } else if (/\bneft\b|\brtgs\b|\bimps\b/i.test(bodyLower)) {
+        paymentMethod = 'NEFT/IMPS';
+      }
+
+      // Extract actual merchant from body (e.g. "at UPI_SWIGGY LTD on")
+      let parsedMerchant = data.merchant || email.fromName || 'Unknown';
+      const atMatch = email.bodyPlain.match(/at\s+(UPI_)?([A-Za-z0-9\s&'.]+?)\s+on\s+\d/i);
+      if (atMatch) parsedMerchant = atMatch[2].trim();
+
       this.ctx.emit('finance:transaction', {
         amount,
         currency: data.currency || 'INR',
         type: data.type || 'debit',
         category: data.category || 'other',
         description: email.subject,
-        merchant: data.merchant || email.fromName || 'Unknown',
+        merchant: parsedMerchant,
+        paymentMethod,
+        merchantDetail,
         source: 'email',
         date: email.date,
         reference: email.messageId,
@@ -635,6 +664,7 @@ Rules:
           'auto-detected',
           `account:${email.accountId}`,
           ...(amount === 0 ? ['amount-unknown'] : []),
+          ...(paymentMethod ? [`method:${paymentMethod.toLowerCase().replace(/\s+/g, '-')}`] : []),
         ],
       });
     }
