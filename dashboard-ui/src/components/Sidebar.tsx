@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Mail, DollarSign, Calendar, FileText,
-  CreditCard, MessageSquare, Settings, ChevronLeft, ChevronRight,
+  CreditCard, MessageSquare, Mic, Settings, ChevronLeft, ChevronRight,
   Bell, Zap, LogOut
 } from 'lucide-react'
 import styles from './Sidebar.module.css'
@@ -22,6 +22,7 @@ const navItems = [
   { to: '/subscriptions', icon: CreditCard, label: 'Subscriptions', section: 'main' },
   { to: '/reminders', icon: Bell, label: 'Reminders', section: 'main' },
   { to: '/chat', icon: MessageSquare, label: 'Chat with Aura', section: 'tools' },
+  { to: '/voice', icon: Mic, label: 'Voice Talk', section: 'tools' },
   { to: '/settings', icon: Settings, label: 'Settings', section: 'tools' },
 ]
 

@@ -11,6 +11,7 @@ import CalendarPage from './pages/CalendarPage';
 import Documents from './pages/Documents';
 import Subscriptions from './pages/Subscriptions';
 import Chat from './pages/Chat';
+import Voice from './pages/Voice';
 import Settings from './pages/Settings';
 
 export default function App() {
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="/documents" element={<Documents />} />
         <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/chat" element={<Chat />} />
+        <Route path="/voice" element={<Voice />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
 

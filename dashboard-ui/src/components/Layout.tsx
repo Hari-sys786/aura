@@ -12,6 +12,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/documents': 'Documents',
   '/subscriptions': 'Subscriptions',
   '/chat': 'Chat with Aura',
+  '/voice': 'Voice Talk',
   '/settings': 'Settings',
 }
 
