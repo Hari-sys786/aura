@@ -36,11 +36,20 @@ export default function Emails() {
 
   // Available months from email dates (IST)
   const availableMonths = useMemo(() => {
-    if (!emails) return []
     const months = new Set<string>()
-    emails.forEach(e => {
-      if (e.date) months.add(format(toIST(e.date), 'yyyy-MM'))
-    })
+    // Always include last 3 months (even if no data)
+    const now = toIST(new Date().toISOString())
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(now)
+      d.setMonth(d.getMonth() - i)
+      months.add(format(d, 'yyyy-MM'))
+    }
+    // Add any extra months from actual data
+    if (emails) {
+      emails.forEach(e => {
+        if (e.date) months.add(format(toIST(e.date), 'yyyy-MM'))
+      })
+    }
     return [...months].sort((a, b) => b.localeCompare(a))
   }, [emails])
 
