@@ -123,11 +123,12 @@ export default function Finance() {
     queryFn: () => api.transactions(2000),
   })
 
-  // ── Derive available months from all transactions ─────────────────────────
+  // ── Derive available months from all transactions (IST) ───────────────────
+  const toIST = (d: string) => new Date(new Date(d).getTime() + 5.5*60*60*1000)
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>()
     for (const t of transactions) {
-      if (t.date) monthSet.add(format(new Date(t.date), 'yyyy-MM'))
+      if (t.date) monthSet.add(format(toIST(t.date), 'yyyy-MM'))
     }
     return [...monthSet].sort((a, b) => b.localeCompare(a)) // newest first
   }, [transactions])
@@ -139,7 +140,7 @@ export default function Finance() {
     const countMap = new Map<string, number>()
     for (const t of transactions) {
       if (!t.date) continue
-      const m = format(new Date(t.date), 'yyyy-MM')
+      const m = format(toIST(t.date), 'yyyy-MM')
       countMap.set(m, (countMap.get(m) ?? 0) + 1)
     }
     // Pick month with most transactions
@@ -179,7 +180,7 @@ export default function Finance() {
     for (const t of monthTransactions) {
       const isDebit = t.type === 'debit'
       const amt = Math.abs(t.amount ?? 0)
-      const date = new Date(t.date)
+      const date = toIST(t.date)
       const dayKey = format(date, 'd')  // just day number within month
 
       if (isDebit) {
@@ -226,7 +227,7 @@ export default function Finance() {
       if (t.category !== filterCat) continue
       const isDebit = t.type === 'debit'
       const amt = Math.abs(t.amount ?? 0)
-      const dayKey = format(new Date(t.date), 'd')
+      const dayKey = format(toIST(t.date), 'd')
       const entry = dayMap.get(dayKey) ?? { debit: 0, credit: 0 }
       if (isDebit) entry.debit += amt
       else entry.credit += amt
