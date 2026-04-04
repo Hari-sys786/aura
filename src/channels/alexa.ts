@@ -148,27 +148,27 @@ export class AlexaChannel {
           return this.respond('What would you like to know?', false, undefined, undefined, true);
         }
         const response = await this.getResponse(query);
-        return this.respond(response.slice(0, 1000), false, 'Aura', response.slice(0, 500));
+        return this.respond(response.slice(0, 1000), true, 'Aura', response.slice(0, 500));
       }
 
       case 'ScheduleIntent': {
         const response = await this.getResponse('What\'s on my calendar today?');
-        return this.respond(response.slice(0, 1000), false, 'Today\'s Schedule');
+        return this.respond(response.slice(0, 1000), true, 'Today\'s Schedule');
       }
 
       case 'EmailIntent': {
         const response = await this.getResponse('Summarize my recent emails briefly');
-        return this.respond(response.slice(0, 1000), false, 'Emails');
+        return this.respond(response.slice(0, 1000), true, 'Emails');
       }
 
       case 'SpendingIntent': {
         const response = await this.getResponse('How much did I spend today? Summarize briefly.');
-        return this.respond(response.slice(0, 1000), false, 'Spending');
+        return this.respond(response.slice(0, 1000), true, 'Spending');
       }
 
       case 'BriefingIntent': {
         const response = await this.getResponse('Give me a brief daily update');
-        return this.respond(response.slice(0, 1000), false, 'Briefing');
+        return this.respond(response.slice(0, 1000), true, 'Briefing');
       }
 
       case 'GreetingIntent': {
