@@ -33,6 +33,25 @@ const colorFor = (cat: string, idx: number) =>
 
 const PAGE_SIZE = 20
 
+/** Detect payment method from transaction description */
+function detectPaymentMethod(tx: any): string {
+  const d = ((tx.description || '') + ' ' + (tx.merchant || '') + ' ' + (tx.source || '')).toLowerCase()
+  if (d.includes('upi') || d.includes('gpay') || d.includes('phonepe') || d.includes('paytm')) return 'UPI'
+  if (d.includes('credit card') || d.includes('card') || d.includes('bpcl sbi') || d.includes('visa') || d.includes('mastercard') || d.includes('rupay')) return 'Card'
+  if (d.includes('neft') || d.includes('rtgs') || d.includes('imps')) return 'NEFT/IMPS'
+  if (d.includes('order') || d.includes('payment link') || d.includes('razorpay') || d.includes('payu')) return 'Online'
+  if (d.includes('transfer') || d.includes('a/c') || d.includes('bank') || d.includes('idfc') || d.includes('yes bank') || d.includes('sbi') || d.includes('hdfc')) return 'Bank Transfer'
+  return 'Other'
+}
+
+/** Check if transaction looks like a self-transfer */
+function isSelfTransfer(tx: any): boolean {
+  const d = ((tx.description || '') + ' ' + (tx.merchant || '')).toLowerCase()
+  return d.includes('self') || d.includes('own account') || d.includes('transfer to self') ||
+    (tx.type === 'debit' && tx.amount === 0) ||
+    (d.includes('transaction alert') && d.includes('transfer') && !d.includes('upi'))
+}
+
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
 const ChartTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
@@ -90,6 +109,7 @@ export default function Finance() {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('all')
   const [filterType, setFilterType] = useState('all')
+  const [filterMethod, setFilterMethod] = useState('all')
   const [chartMode, setChartMode] = useState<'bar' | 'area' | 'pie'>('bar')
   const [page, setPage] = useState(1)
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'))
@@ -129,7 +149,8 @@ export default function Finance() {
   const monthTransactions = useMemo(() => {
     return transactions.filter(t => {
       if (!t.date) return false
-      return format(new Date(t.date), 'yyyy-MM') === selectedMonth
+      const istDate = new Date(new Date(t.date).getTime() + 5.5*60*60*1000)
+      return format(istDate, 'yyyy-MM') === selectedMonth
     })
   }, [transactions, selectedMonth])
 
@@ -218,6 +239,12 @@ export default function Finance() {
     return monthTransactions.filter(t => {
       if (filterCat !== 'all' && t.category !== filterCat) return false
       if (filterType !== 'all' && t.type !== filterType) return false
+      if (filterMethod !== 'all') {
+        const method = detectPaymentMethod(t)
+        if (filterMethod === 'self-transfer' && !isSelfTransfer(t)) return false
+        else if (filterMethod === 'no-self' && isSelfTransfer(t)) return false
+        else if (filterMethod !== 'self-transfer' && filterMethod !== 'no-self' && method !== filterMethod) return false
+      }
       if (search) {
         const q = search.toLowerCase()
         if (!t.merchant?.toLowerCase().includes(q) &&
@@ -226,7 +253,7 @@ export default function Finance() {
       }
       return true
     })
-  }, [monthTransactions, filterCat, filterType, search])
+  }, [monthTransactions, filterCat, filterType, filterMethod, search])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -427,7 +454,7 @@ export default function Finance() {
           <span className={styles.sectionTitle}>
             Transactions
             <span style={{ color:'var(--text-muted)', fontWeight:400, marginLeft:6 }}>
-              ({filtered.length}{filtered.length !== transactions.length ? ` of ${transactions.length}` : ''})
+              ({filtered.length} of {monthTransactions.length} in {selectedMonth})
             </span>
           </span>
           <div className={styles.filters}>
@@ -446,6 +473,17 @@ export default function Finance() {
               onChange={e => setFilter(() => setFilterCat(e.target.value))}>
               {categories.map(c => <option key={c} value={c}>{c === 'all' ? 'All categories' : c}</option>)}
             </select>
+            <select className={styles.select} value={filterMethod}
+              onChange={e => setFilter(() => setFilterMethod(e.target.value))}>
+              <option value="all">All methods</option>
+              <option value="UPI">UPI</option>
+              <option value="Card">Card</option>
+              <option value="NEFT/IMPS">NEFT/IMPS</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Online">Online</option>
+              <option value="no-self">Hide self-transfers</option>
+              <option value="self-transfer">Self-transfers only</option>
+            </select>
           </div>
         </div>
 
@@ -454,6 +492,7 @@ export default function Finance() {
             <div className={styles.th}>Merchant</div>
             <div className={styles.th}>Description</div>
             <div className={styles.th}>Category</div>
+            <div className={styles.th}>Method</div>
             <div className={styles.th} style={{ textAlign:'right' }}>Amount</div>
             <div className={styles.th} style={{ textAlign:'right' }}>Date</div>
           </div>
@@ -478,6 +517,9 @@ export default function Finance() {
                 <div className={styles.categoryBadge} style={{ background: color + '22', color }}>
                   {tx.category}
                 </div>
+                <div style={{ fontSize: 11, color: isSelfTransfer(tx) ? 'var(--text-muted)' : 'var(--text-secondary)' }}>
+                  {detectPaymentMethod(tx)}{isSelfTransfer(tx) ? ' 🔄' : ''}
+                </div>
                 <div className={`${styles.amount} ${isDebit ? styles.debit : styles.credit}`}>
                   {isUnknown
                     ? <span style={{ color:'var(--text-muted)', fontSize:11 }}>unknown</span>
@@ -485,7 +527,7 @@ export default function Finance() {
                   }
                 </div>
                 <div className={styles.date}>
-                  {tx.date ? format(new Date(tx.date), 'MMM d') : '—'}
+                  {tx.date ? format(new Date(new Date(tx.date).getTime() + 5.5*60*60*1000), 'MMM d, h:mm a') : '—'}
                 </div>
               </div>
             )
