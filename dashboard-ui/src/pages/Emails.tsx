@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, Mail, ChevronLeft, ChevronRight } from 'lucide-react'
-import { format } from 'date-fns'
 import { api } from '../api'
 import { PageLoader } from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
