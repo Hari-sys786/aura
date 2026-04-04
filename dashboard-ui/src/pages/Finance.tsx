@@ -127,17 +127,15 @@ export default function Finance() {
   const toIST = (d: string) => new Date(new Date(d).getTime() + 5.5*60*60*1000)
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>()
-    // Always include last 3 months (even if no data)
-    const now = toIST(new Date().toISOString())
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(now)
-      d.setMonth(d.getMonth() - i)
-      monthSet.add(format(d, 'yyyy-MM'))
-    }
+    // Always include current month
+    monthSet.add(format(toIST(new Date().toISOString()), 'yyyy-MM'))
+    // Add all months that have actual data
     for (const t of transactions) {
       if (t.date) monthSet.add(format(toIST(t.date), 'yyyy-MM'))
     }
-    return [...monthSet].sort((a, b) => b.localeCompare(a)) // newest first
+    // Only past + current months, never future
+    const currentMonth = format(toIST(new Date().toISOString()), 'yyyy-MM')
+    return [...monthSet].filter(m => m <= currentMonth).sort((a, b) => b.localeCompare(a))
   }, [transactions])
 
   // ── Auto-select the month with most transactions on first load ────────────
