@@ -49,6 +49,7 @@ export class AlexaChannel {
 
   async handleRequest(body: string): Promise<AlexaResponse> {
     const req = JSON.parse(body) as AlexaRequest;
+    this.log.info(`Alexa request: type=${req.request.type} intent=${req.request.intent?.name ?? 'none'} slots=${JSON.stringify(req.request.intent?.slots ?? {})}`);
 
     if (this.skillId && req.session.application.applicationId !== this.skillId) {
       this.log.warn(`Alexa: invalid skill ID ${req.session.application.applicationId}`);

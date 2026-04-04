@@ -184,39 +184,79 @@ Be concise. Answer with actual data, not instructions.`;
       }
     }
 
-    // Finance intent — filter by IST date
+    // Finance intent — smart date filtering based on query
     const financeKeywords = ['spend', 'spending', 'expense', 'money', 'budget', 'finance', 'transaction', 'cost'];
     if (financeKeywords.some(k => msg.includes(k))) {
       try {
         const allTransactions = this.storage.sqlite.list('transactions');
         if (allTransactions.length > 0) {
-          // Get current IST date for filtering
-          
           const todayISTStr = todayIST();
           const monthISTStr = monthIST();
-
           const parsed = allTransactions.map(t => ({ ...JSON.parse(t.value), _key: t.key }));
 
-          const todayTxns = parsed.filter((v: any) => toISTDate(v.date) === todayISTStr);
+          // Detect requested date range from the query
+          const nowISTDate = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+          let targetDate = todayISTStr; // default: today
+          let dateLabel = 'Today';
+
+          if (/yesterday/i.test(msg)) {
+            const yd = new Date(nowISTDate); yd.setDate(yd.getDate() - 1);
+            targetDate = yd.toISOString().slice(0, 10);
+            dateLabel = 'Yesterday';
+          } else if (/last\s*week/i.test(msg)) {
+            const wd = new Date(nowISTDate); wd.setDate(wd.getDate() - 7);
+            targetDate = ''; dateLabel = 'Last 7 days';
+          } else if (/this\s*week/i.test(msg)) {
+            const dayOfWeek = nowISTDate.getDay();
+            const weekStart = new Date(nowISTDate); weekStart.setDate(weekStart.getDate() - dayOfWeek);
+            targetDate = ''; dateLabel = 'This week';
+          }
+
+          // Match: exact YYYY-MM-DD in query, or "april 3", "3rd april", etc
+          const dateMatch = msg.match(/(\d{4}-\d{2}-\d{2})/);
+          if (dateMatch) { targetDate = dateMatch[1]; dateLabel = targetDate; }
+
+          // Filter transactions
+          let filtered: any[];
+          if (dateLabel === 'Last 7 days') {
+            const cutoff = new Date(nowISTDate); cutoff.setDate(cutoff.getDate() - 7);
+            const cutoffStr = cutoff.toISOString().slice(0, 10);
+            filtered = parsed.filter((v: any) => toISTDate(v.date) >= cutoffStr);
+          } else if (dateLabel === 'This week') {
+            const dayOfWeek = nowISTDate.getDay();
+            const weekStart = new Date(nowISTDate); weekStart.setDate(weekStart.getDate() - dayOfWeek);
+            const weekStartStr = weekStart.toISOString().slice(0, 10);
+            filtered = parsed.filter((v: any) => toISTDate(v.date) >= weekStartStr);
+          } else if (/this\s*month|month/i.test(msg) && !targetDate) {
+            filtered = parsed.filter((v: any) => toISTDate(v.date)?.startsWith(monthISTStr));
+            dateLabel = `This month (${monthISTStr})`;
+          } else {
+            filtered = parsed.filter((v: any) => toISTDate(v.date) === targetDate);
+          }
+
+          // Also compute month totals for context
           const monthTxns = parsed.filter((v: any) => toISTDate(v.date)?.startsWith(monthISTStr));
+          const monthSpent = monthTxns.filter((v: any) => v.type === 'debit').reduce((s: number, v: any) => s + (v.amount || 0), 0);
 
-          const todaySpent = todayTxns
-            .filter((v: any) => v.type === 'debit')
-            .reduce((sum: number, v: any) => sum + (v.amount || 0), 0);
-          const monthSpent = monthTxns
-            .filter((v: any) => v.type === 'debit')
-            .reduce((sum: number, v: any) => sum + (v.amount || 0), 0);
+          const periodSpent = filtered.filter((v: any) => v.type === 'debit').reduce((s: number, v: any) => s + (v.amount || 0), 0);
+          const periodDebits = filtered.filter((v: any) => v.type === 'debit');
 
-          const recent = todayTxns.slice(0, 10).map((v: any) =>
-            `- ${v.type} ₹${v.amount} | ${v.merchant || v.description?.slice(0, 30)} (${v.category || 'uncategorized'}) | ${toISTDate(v.date)}`
+          // Sort by amount descending for "top" queries
+          const sortedDebits = [...periodDebits].sort((a: any, b: any) => (b.amount || 0) - (a.amount || 0));
+          const topN = /top\s*(\d+)/i.exec(msg);
+          const limit = topN ? parseInt(topN[1]) : 10;
+          const shown = sortedDebits.slice(0, limit);
+
+          const txnList = shown.map((v: any) =>
+            `- ₹${v.amount} | ${v.merchant || v.description?.slice(0, 30)} (${v.category || 'uncategorized'}) | ${toISTDate(v.date)}`
           );
 
-          const summary = `Today (${todayISTStr} IST): ₹${todaySpent} spent across ${todayTxns.filter((v: any) => v.type === 'debit').length} transactions.\nThis month: ₹${monthSpent} spent across ${monthTxns.filter((v: any) => v.type === 'debit').length} transactions.`;
+          const summary = `${dateLabel} (IST): ₹${periodSpent} spent across ${periodDebits.length} debits.\nThis month total: ₹${monthSpent}.`;
 
-          if (todayTxns.length > 0) {
-            parts.push(`Finance:\n${summary}\n\nToday's transactions:\n${recent.join('\n')}`);
+          if (shown.length > 0) {
+            parts.push(`Finance:\n${summary}\n\nTransactions${topN ? ` (top ${limit})` : ''}:\n${txnList.join('\n')}`);
           } else {
-            parts.push(`Finance:\n${summary}\nNo transactions today yet.`);
+            parts.push(`Finance:\n${summary}\nNo debit transactions for ${dateLabel.toLowerCase()}.`);
           }
         } else {
           parts.push('No transactions recorded yet.');
