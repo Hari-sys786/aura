@@ -28,7 +28,11 @@ RULES:
 - No markdown, no bullet points, no special characters, no asterisks.
 - Say numbers in words when speaking amounts (say "eight thousand rupees" not "₹8,000").
 - Summarize, don't itemize. Give the key takeaway first.
-- Sound warm and helpful, like a trusted assistant.`;
+- Sound warm and helpful, like a trusted assistant.
+- The user is in IST (India Standard Time, UTC+5:30). All dates/times must be in IST.
+- "Today" means the current date in IST, not UTC.
+- If the data shows no transactions/emails for today, say "nothing so far today" — don't report yesterday's data as today's.
+- Always use the LATEST data provided. Never make up numbers.`;
 
 export class AlexaChannel {
   private agent: Agent;
@@ -185,8 +189,15 @@ export class AlexaChannel {
       case 'AMAZON.CancelIntent':
         return this.respond('Goodbye!', true);
 
-      case 'AMAZON.FallbackIntent':
-        return this.respond('I\'m not sure about that. Try asking about your schedule, emails, or spending. Or just chat with me!', false, undefined, undefined, true);
+      case 'AMAZON.FallbackIntent': {
+        // Alexa couldn't match utterance to an intent — route through AI anyway
+        // The raw speech text isn't available in FallbackIntent, so prompt for clarification
+        // but keep the session open for the next utterance to be processed
+        return this.respond(
+          'I\'m here! Try saying something like "ask Aura about my expenses" or "tell Aura to check my emails". What would you like to know?',
+          false, undefined, undefined, true
+        );
+      }
 
       default: {
         const response = await this.getResponse(intent);

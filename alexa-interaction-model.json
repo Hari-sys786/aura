@@ -1,0 +1,155 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "aura",
+      "intents": [
+        {
+          "name": "AuraQueryIntent",
+          "slots": [{"name": "query", "type": "AMAZON.SearchQuery"}],
+          "samples": [
+            "ask {query}",
+            "tell me {query}",
+            "what is {query}",
+            "show me {query}",
+            "help me with {query}",
+            "I want to know {query}",
+            "can you check {query}",
+            "talk to me about {query}",
+            "what do you think about {query}",
+            "how about {query}",
+            "do you know {query}",
+            "find out {query}",
+            "look up {query}",
+            "search for {query}",
+            "get me {query}",
+            "I need {query}",
+            "please tell me {query}",
+            "what about {query}",
+            "explain {query}",
+            "describe {query}"
+          ]
+        },
+        {
+          "name": "AuraChatIntent",
+          "slots": [{"name": "message", "type": "AMAZON.SearchQuery"}],
+          "samples": [
+            "say {message}",
+            "tell her {message}",
+            "reply with {message}",
+            "just say {message}",
+            "respond with {message}",
+            "chat {message}",
+            "let's talk about {message}",
+            "I feel {message}",
+            "I think {message}",
+            "guess what {message}",
+            "you know what {message}",
+            "I was wondering {message}",
+            "can we talk about {message}",
+            "I have a question about {message}",
+            "what should I do about {message}",
+            "give me advice on {message}",
+            "help me understand {message}",
+            "I'm curious about {message}",
+            "tell me more about {message}",
+            "let me ask you {message}"
+          ]
+        },
+        {
+          "name": "ScheduleIntent",
+          "samples": [
+            "what's on my schedule",
+            "my calendar",
+            "today's events",
+            "what's happening today",
+            "any meetings today",
+            "what's next on my calendar",
+            "do I have anything planned",
+            "what's coming up",
+            "any events today",
+            "show my appointments"
+          ]
+        },
+        {
+          "name": "EmailIntent",
+          "samples": [
+            "check my email",
+            "any new emails",
+            "show my inbox",
+            "email summary",
+            "what emails did I get",
+            "any important emails",
+            "read my mail",
+            "show my emails",
+            "what's in my inbox",
+            "any messages"
+          ]
+        },
+        {
+          "name": "SpendingIntent",
+          "samples": [
+            "how much did I spend",
+            "today's spending",
+            "my expenses",
+            "spending summary",
+            "where did my money go",
+            "how's my budget",
+            "financial summary",
+            "show my transactions",
+            "what did I spend on",
+            "money spent today"
+          ]
+        },
+        {
+          "name": "BriefingIntent",
+          "samples": [
+            "morning briefing",
+            "daily briefing",
+            "give me my briefing",
+            "what's the update",
+            "catch me up",
+            "what did I miss",
+            "give me a summary",
+            "daily update",
+            "what's new",
+            "brief me"
+          ]
+        },
+        {
+          "name": "GreetingIntent",
+          "samples": [
+            "hello",
+            "hey",
+            "hi",
+            "good morning",
+            "good evening",
+            "what's up",
+            "how are you",
+            "hey aura",
+            "hi aura",
+            "howdy"
+          ]
+        },
+        {
+          "name": "GoodbyeIntent",
+          "samples": [
+            "bye",
+            "goodbye",
+            "see you later",
+            "that's all",
+            "thanks that's it",
+            "I'm done",
+            "good night",
+            "see ya",
+            "talk to you later",
+            "exit"
+          ]
+        },
+        {"name": "AMAZON.HelpIntent", "samples": []},
+        {"name": "AMAZON.StopIntent", "samples": []},
+        {"name": "AMAZON.CancelIntent", "samples": []},
+        {"name": "AMAZON.FallbackIntent", "samples": []}
+      ]
+    }
+  }
+}

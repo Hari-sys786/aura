@@ -1067,6 +1067,11 @@ Rules:
     }
   }
 
+  /** Trigger immediate email sync — used by Alexa/voice channels for fresh data */
+  async syncNow(): Promise<void> {
+    return this.checkNewEmails();
+  }
+
   // ─── Query Helpers ──────────────────────────────────────────────────────────
 
   /**

@@ -137,14 +137,24 @@ Be concise. Answer with actual data, not instructions.`;
     if (emailKeywords.some(k => msg.includes(k))) {
       try {
         const emailPlugin = this.plugins.getPlugin('email');
+        // Trigger a fresh sync if plugin supports it (non-blocking, best effort)
+        if (emailPlugin && typeof (emailPlugin as any).syncNow === 'function') {
+          try { await Promise.race([(emailPlugin as any).syncNow(), new Promise(r => setTimeout(r, 3000))]); }
+          catch { /* best effort */ }
+        }
         if (emailPlugin) {
           const emails = this.storage.sqlite.list('emails');
           if (emails.length > 0) {
-            const classified = emails.slice(0, 20).map(e => {
-              const val = JSON.parse(e.value);
-              return `- [${val.category}] From: ${val.fromName} | Subject: ${val.subject} | Date: ${val.date?.slice(0, 10) ?? 'unknown'}`;
+            // Sort by date descending and show most recent, with IST date
+            const parsed = emails.map(e => JSON.parse(e.value))
+              .sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+            const classified = parsed.slice(0, 15).map((val: any) => {
+              const utcDate = new Date(val.date || 0);
+              const istDate = new Date(utcDate.getTime() + 5.5 * 60 * 60 * 1000);
+              const dateStr = istDate.toISOString().slice(0, 16).replace('T', ' ') + ' IST';
+              return `- [${val.category}] From: ${val.fromName} | Subject: ${val.subject} | ${dateStr}`;
             });
-            parts.push(`Recent Emails (${emails.length} total):\n${classified.join('\n')}`);
+            parts.push(`Recent Emails (${emails.length} total, latest first):\n${classified.join('\n')}`);
           } else {
             parts.push('No emails fetched yet. Email sync runs every 5 minutes.');
           }
@@ -174,21 +184,48 @@ Be concise. Answer with actual data, not instructions.`;
       }
     }
 
-    // Finance intent
+    // Finance intent — filter by IST date
     const financeKeywords = ['spend', 'spending', 'expense', 'money', 'budget', 'finance', 'transaction', 'cost'];
     if (financeKeywords.some(k => msg.includes(k))) {
       try {
-        const transactions = this.storage.sqlite.list('transactions');
-        if (transactions.length > 0) {
-          const recent = transactions.slice(0, 10).map(t => {
-            const val = JSON.parse(t.value);
-            return `- ${val.type} ₹${val.amount} | ${val.merchant} (${val.category}) | ${val.date?.slice(0, 10) ?? ''}`;
-          });
-          const totalSpent = transactions
-            .map(t => JSON.parse(t.value))
-            .filter((v: { type: string }) => v.type === 'debit')
-            .reduce((sum: number, v: { amount: number }) => sum + v.amount, 0);
-          parts.push(`Finance (${transactions.length} transactions, Total spent: ₹${totalSpent}):\n${recent.join('\n')}`);
+        const allTransactions = this.storage.sqlite.list('transactions');
+        if (allTransactions.length > 0) {
+          // Get current IST date for filtering
+          const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+          const todayIST = nowIST.toISOString().slice(0, 10); // YYYY-MM-DD in IST
+          const monthIST = todayIST.slice(0, 7); // YYYY-MM
+
+          const parsed = allTransactions.map(t => ({ ...JSON.parse(t.value), _key: t.key }));
+
+          // Convert transaction dates to IST for comparison
+          const toISTDate = (d: string) => {
+            if (!d) return '';
+            const utc = new Date(d);
+            const ist = new Date(utc.getTime() + 5.5 * 60 * 60 * 1000);
+            return ist.toISOString().slice(0, 10);
+          };
+
+          const todayTxns = parsed.filter((v: any) => toISTDate(v.date) === todayIST);
+          const monthTxns = parsed.filter((v: any) => toISTDate(v.date)?.startsWith(monthIST));
+
+          const todaySpent = todayTxns
+            .filter((v: any) => v.type === 'debit')
+            .reduce((sum: number, v: any) => sum + (v.amount || 0), 0);
+          const monthSpent = monthTxns
+            .filter((v: any) => v.type === 'debit')
+            .reduce((sum: number, v: any) => sum + (v.amount || 0), 0);
+
+          const recent = todayTxns.slice(0, 10).map((v: any) =>
+            `- ${v.type} ₹${v.amount} | ${v.merchant || v.description?.slice(0, 30)} (${v.category || 'uncategorized'}) | ${toISTDate(v.date)}`
+          );
+
+          const summary = `Today (${todayIST} IST): ₹${todaySpent} spent across ${todayTxns.filter((v: any) => v.type === 'debit').length} transactions.\nThis month: ₹${monthSpent} spent across ${monthTxns.filter((v: any) => v.type === 'debit').length} transactions.`;
+
+          if (todayTxns.length > 0) {
+            parts.push(`Finance:\n${summary}\n\nToday's transactions:\n${recent.join('\n')}`);
+          } else {
+            parts.push(`Finance:\n${summary}\nNo transactions today yet.`);
+          }
         } else {
           parts.push('No transactions recorded yet.');
         }
@@ -267,7 +304,9 @@ Be concise. Answer with actual data, not instructions.`;
 
     // Add channel-specific instructions
     if (context?.channel === 'alexa') {
-      parts.push(`\nIMPORTANT: This is a voice response for Alexa. Keep it SHORT (under 3 sentences). No markdown, no bullet lists, no special characters. Speak naturally as if talking to someone. Numbers should be spoken plainly (say "eight thousand three hundred" not "₹8,345.45"). Summarize, don't itemize.`);
+      const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+      const todayIST = nowIST.toISOString().slice(0, 10);
+      parts.push(`\nIMPORTANT: This is a voice response for Alexa. Keep it SHORT (under 3 sentences). No markdown, no bullet lists, no special characters. Speak naturally. Numbers spoken plainly ("eight thousand" not "₹8,000"). Summarize don't itemize. User timezone is IST (UTC+5:30). Today's date in IST is ${todayIST}. Only report data matching TODAY's date. If no data for today, say "nothing so far today".`);
     } else if (context) {
       parts.push(`\nContext: ${JSON.stringify(context)}`);
     }
