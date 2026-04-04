@@ -43,7 +43,7 @@ export default function Overview() {
       id: t.id,
       type: 'transaction',
       title: `${t.merchant}`,
-      sub: `${t.currency} ${Math.abs(t.amount).toFixed(2)} — ${t.category}`,
+      sub: `${t.currency} ${Math.abs(t.amount ?? 0).toFixed(2)} — ${t.category}`,
       time: t.date,
       color: '#4ade80',
     })) ?? []),

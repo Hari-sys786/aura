@@ -1,5 +1,6 @@
 import type { Agent } from '../core/agent.js';
 import type { Logger } from '../core/logger.js';
+import type { MemoryStore } from '../core/storage/index.js';
 
 interface TelegramUpdate {
   update_id: number;
@@ -35,8 +36,12 @@ export class TelegramChannel {
   private allowedUsers: Set<number> = new Set();
   private inFlight = 0;
   private readonly maxConcurrent = 5;
+  private knownChatIds: Set<number> = new Set();
+  private storage: MemoryStore | null = null;
+  private readonly CHAT_IDS_KEY = 'chat_ids';
+  private readonly CHAT_IDS_COLLECTION = 'telegram';
 
-  constructor(token: string, agent: Agent, logger: Logger, allowedUserIds?: number[]) {
+  constructor(token: string, agent: Agent, logger: Logger, allowedUserIds?: number[], storage?: MemoryStore) {
     this.token = token;
     this.baseUrl = `https://api.telegram.org/bot${token}`;
     this.agent = agent;
@@ -45,6 +50,47 @@ export class TelegramChannel {
     if (allowedUserIds && allowedUserIds.length > 0) {
       this.allowedUsers = new Set(allowedUserIds);
       this.log.info(`Telegram: restricted to ${allowedUserIds.length} allowed user(s)`);
+    }
+
+    if (storage) {
+      this.storage = storage;
+      // Load persisted chatIds on startup
+      const stored = storage.get<{ ids: number[] }>(this.CHAT_IDS_COLLECTION, this.CHAT_IDS_KEY);
+      if (stored?.ids) {
+        this.knownChatIds = new Set(stored.ids);
+        this.log.info(`Telegram: loaded ${this.knownChatIds.size} known chat(s) from storage`);
+      }
+    }
+  }
+
+  private registerChatId(chatId: number): void {
+    if (this.knownChatIds.has(chatId)) return;
+    this.knownChatIds.add(chatId);
+    if (this.storage) {
+      this.storage.set(this.CHAT_IDS_COLLECTION, this.CHAT_IDS_KEY, { ids: Array.from(this.knownChatIds) });
+    }
+    this.log.info(`Telegram: registered new chat ${chatId} (total: ${this.knownChatIds.size})`);
+  }
+
+  getChatIds(): number[] {
+    return Array.from(this.knownChatIds);
+  }
+
+  async broadcastAlert(message: string, urgency: string = 'normal'): Promise<void> {
+    if (this.knownChatIds.size === 0) {
+      this.log.warn('Telegram broadcastAlert: no known chats yet — alert dropped');
+      return;
+    }
+    const prefix = urgency === 'critical' ? '🚨' :
+                   urgency === 'high' ? '⚠️' :
+                   urgency === 'low' ? '📌' : '📢';
+    const text = `${prefix} ${message}`;
+    for (const chatId of this.knownChatIds) {
+      try {
+        await this.sendMessage(chatId, text);
+      } catch (err) {
+        this.log.error(`Telegram broadcastAlert failed for chat ${chatId}: ${err}`);
+      }
     }
   }
 
@@ -113,6 +159,9 @@ export class TelegramChannel {
     }
 
     this.log.info(`Telegram [${msg.from.username ?? userId}]: ${text.slice(0, 100)}`);
+
+    // Register this chat for proactive alerts
+    this.registerChatId(chatId);
 
     // Handle commands
     if (text.startsWith('/')) {

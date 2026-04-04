@@ -40,6 +40,8 @@ export interface HomeAssistantConfig {
 
 export interface AlexaConfig {
   skillId: string;
+  /** Separate fast AI config for Alexa (must respond within 7s) */
+  ai?: AiConfig;
 }
 
 export interface AuraConfig {
@@ -118,6 +120,12 @@ export function loadConfig(): AuraConfig {
     },
     alexa: {
       skillId: get(yaml, 'alexa.skillId') ?? env('ALEXA_SKILL_ID'),
+      ai: env('ALEXA_AI_MODEL') ? {
+        provider: (get(yaml, 'alexa.ai.provider') ?? env('ALEXA_AI_PROVIDER', env('AI_PROVIDER', 'nvidia'))) as AiConfig['provider'],
+        model: get(yaml, 'alexa.ai.model') ?? env('ALEXA_AI_MODEL'),
+        baseUrl: get(yaml, 'alexa.ai.baseUrl') ?? env('ALEXA_AI_BASE_URL', env('AI_BASE_URL', 'https://integrate.api.nvidia.com/v1')),
+        apiKey: get(yaml, 'alexa.ai.apiKey') ?? env('ALEXA_AI_API_KEY', env('AI_API_KEY')),
+      } : undefined,
     },
     masterPassword: get(yaml, 'masterPassword') ?? env('MASTER_PASSWORD'),
     plugins: [],

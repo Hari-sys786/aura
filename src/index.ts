@@ -6,6 +6,7 @@ import { createAiAdapter } from './core/ai/index.js';
 import { Scheduler } from './core/scheduler.js';
 import { CryptoVault } from './core/crypto.js';
 import { Agent } from './core/agent.js';
+import { AlertRegistry } from './core/alerts.js';
 import { TelegramChannel } from './channels/telegram.js';
 import { Dashboard } from './dashboard/server.js';
 import { HomeAssistantChannel } from './channels/homeassistant.js';
@@ -44,6 +45,9 @@ async function main(): Promise<void> {
   const scheduler = new Scheduler(childLogger(log, 'scheduler'));
   log.info('Scheduler ready');
 
+  // 4b. Initialize alert registry (dedup layer for proactive notifications)
+  const alertRegistry = new AlertRegistry(storage);
+
   // 5. Initialize plugin bus
   const plugins = new PluginBus(storage, childLogger(log, 'plugins'));
 
@@ -53,6 +57,7 @@ async function main(): Promise<void> {
 
   // Register built-in plugins
   const financePlugin = new FinancePlugin();
+  financePlugin.setAlertRegistry(alertRegistry);
   await plugins.register(financePlugin, config as unknown as Record<string, unknown>);
   await plugins.activate('finance');
 
@@ -63,6 +68,7 @@ async function main(): Promise<void> {
   // Email and Calendar require OAuth config — register but only activate if configured
   if (config.google.clientId && config.google.clientSecret && config.google.refreshToken) {
     const calendarPlugin = new CalendarPlugin();
+    calendarPlugin.setAlertRegistry(alertRegistry);
     await plugins.register(calendarPlugin, {
       clientId: config.google.clientId,
       clientSecret: config.google.clientSecret,
@@ -72,6 +78,7 @@ async function main(): Promise<void> {
     await plugins.activate('calendar');
 
     const emailPlugin = new EmailPlugin();
+    emailPlugin.setAlertRegistry(alertRegistry);
     await plugins.register(emailPlugin, {
       accounts: [
         {
@@ -115,6 +122,7 @@ async function main(): Promise<void> {
 
   // Subscription watchdog
   const subPlugin = new SubscriptionPlugin();
+  subPlugin.setAlertRegistry(alertRegistry);
   await plugins.register(subPlugin);
   await plugins.activate('subscriptions');
 
@@ -146,13 +154,17 @@ async function main(): Promise<void> {
       config.telegram.botToken,
       agent,
       childLogger(log, 'telegram'),
+      undefined,
+      storage,
     );
 
-    // Wire notifications through Telegram
+    // Wire notifications through Telegram — real delivery
     plugins.setNotifyHandler(async (message, options) => {
-      // For now, send to the first chat that messaged the bot
-      // In production, this would use stored user chat IDs
-      log.info(`Notification: ${message}`);
+      if (telegram) {
+        await telegram.broadcastAlert(message, options?.urgency);
+      } else {
+        log.info(`Notification (no Telegram): ${message}`);
+      }
     });
 
     try {
@@ -179,11 +191,19 @@ async function main(): Promise<void> {
     log.info('Home Assistant not configured — skipping (set HA_URL + HA_TOKEN)');
   }
 
-  // 10. Start web dashboard
+  // 10. Create fast AI adapter for Alexa (if configured)
+  let alexaAi: import('./core/ai/adapter.js').AiAdapter | undefined;
+  if (config.alexa.ai) {
+    alexaAi = createAiAdapter(config.alexa.ai, childLogger(log, 'alexa-ai'));
+    log.info(`  Alexa AI: ${config.alexa.ai.provider} / ${config.alexa.ai.model}`);
+  }
+
+  // 11. Start web dashboard
   const dashboard = new Dashboard(
     { port: config.server.port, host: config.server.host },
     storage, plugins, agent, scheduler,
     childLogger(log, 'dashboard'),
+    alexaAi,
   );
 
   // 10. Boot summary

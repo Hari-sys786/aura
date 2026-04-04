@@ -10,7 +10,7 @@ import type { Logger } from '../core/logger.js';
 import { AuthManager } from './auth.js';
 
 // Public paths that don't require auth
-const PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/register', '/api/auth/check']);
+const PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/register', '/api/auth/check', '/api/alexa', '/api/google-home']);
 
 interface DashboardConfig { port: number; host: string; }
 
@@ -22,14 +22,16 @@ export class Dashboard {
   private scheduler: Scheduler;
   private log: Logger;
   private auth: AuthManager;
+  private alexaAi: import('../core/ai/adapter.js').AiAdapter | undefined;
 
-  constructor(config: DashboardConfig, storage: MemoryStore, plugins: PluginBus, agent: Agent, scheduler: Scheduler, logger: Logger) {
+  constructor(config: DashboardConfig, storage: MemoryStore, plugins: PluginBus, agent: Agent, scheduler: Scheduler, logger: Logger, alexaAi?: import('../core/ai/adapter.js').AiAdapter) {
     this.storage = storage;
     this.plugins = plugins;
     this.agent = agent;
     this.scheduler = scheduler;
     this.log = logger;
     this.auth = new AuthManager(storage.sqlite);
+    this.alexaAi = alexaAi;
     this.server = http.createServer((req, res) => this.handle(req, res));
     this.server.listen(config.port, config.host, () => {
       this.log.info(`Dashboard running at http://${config.host}:${config.port}`);
@@ -261,7 +263,9 @@ export class Dashboard {
       if (p === '/api/alexa' && req.method === 'POST') {
         const body = await this.bodyRaw(req);
         const { AlexaChannel } = await import('../channels/alexa.js');
-        return this.json(res, await new AlexaChannel(this.agent, this.log).handleRequest(body));
+        // Use fast AI adapter for Alexa if configured, otherwise falls back to agent's model
+        const alexa = new AlexaChannel(this.agent, this.log, this.alexaAi);
+        return this.json(res, await alexa.handleRequest(body));
       }
       if (p === '/api/google-home' && req.method === 'POST') {
         const body = await this.bodyRaw(req);

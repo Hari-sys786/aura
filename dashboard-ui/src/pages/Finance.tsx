@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
   DollarSign, TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle,
-  Search, Bell, Calendar, ChevronLeft, ChevronRight
+  Search, Bell, Calendar, ChevronLeft, ChevronRight, CalendarDays
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -69,7 +69,7 @@ const PieTip = ({ active, payload }: any) => {
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
-const StatCard = ({ label, value, sub, icon: Icon, color }: any) => (
+const StatCard = ({ label, value, sub, icon: Icon, color, isCount }: any) => (
   <div className={styles.statCard}>
     <div className={styles.statIcon} style={{ background: color + '22', color }}>
       <Icon size={18} />
@@ -77,7 +77,9 @@ const StatCard = ({ label, value, sub, icon: Icon, color }: any) => (
     <div className={styles.statBody}>
       <div className={styles.statLabel}>{label}</div>
       <div className={styles.statValue}>
-        ₹{Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+        {isCount
+          ? Number(value).toLocaleString('en-IN')
+          : `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
       </div>
       {sub && <div className={styles.statSub}>{sub}</div>}
     </div>
@@ -90,40 +92,74 @@ export default function Finance() {
   const [filterType, setFilterType] = useState('all')
   const [chartMode, setChartMode] = useState<'bar' | 'area' | 'pie'>('bar')
   const [page, setPage] = useState(1)
+  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'))
+  const [monthInitialized, setMonthInitialized] = useState(false)
 
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
-    queryFn: () => api.transactions(500),
+    queryFn: () => api.transactions(2000),
   })
+
+  // ── Derive available months from all transactions ─────────────────────────
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set<string>()
+    for (const t of transactions) {
+      if (t.date) monthSet.add(format(new Date(t.date), 'yyyy-MM'))
+    }
+    return [...monthSet].sort((a, b) => b.localeCompare(a)) // newest first
+  }, [transactions])
+
+  // ── Auto-select the month with most transactions on first load ────────────
+  useEffect(() => {
+    if (monthInitialized || !transactions.length || !availableMonths.length) return
+    // Count per month
+    const countMap = new Map<string, number>()
+    for (const t of transactions) {
+      if (!t.date) continue
+      const m = format(new Date(t.date), 'yyyy-MM')
+      countMap.set(m, (countMap.get(m) ?? 0) + 1)
+    }
+    // Pick month with most transactions
+    const best = [...countMap.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+    if (best) setSelectedMonth(best)
+    setMonthInitialized(true)
+  }, [transactions, availableMonths, monthInitialized])
+
+  // ── Transactions filtered to selected month ────────────────────────────────
+  const monthTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      if (!t.date) return false
+      return format(new Date(t.date), 'yyyy-MM') === selectedMonth
+    })
+  }, [transactions, selectedMonth])
 
   const { data: bills = [] } = useQuery({
     queryKey: ['bills'],
     queryFn: async () => {
-      const r = await fetch('/api/bills')
-      return r.json()
+      const token = localStorage.getItem('aura_token') || ''
+      const r = await fetch('/api/bills', { headers: { Authorization: `Bearer ${token}` } })
+      if (!r.ok) return []
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
     },
   })
 
-  // ── Derived analytics ─────────────────────────────────────────────────────
+  // ── Derived analytics (scoped to selected month) ──────────────────────────
   const { byCategory, chartData, stats, categories } = useMemo(() => {
-    if (!transactions.length) return { byCategory: [], chartData: [], stats: null, categories: ['all'] }
+    if (!monthTransactions.length) return { byCategory: [], chartData: [], stats: null, categories: ['all'] }
 
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-
-    let totalDebit = 0, totalCredit = 0, thisMonthDebit = 0
+    let totalDebit = 0, totalCredit = 0
     const catMap = new Map<string, number>()
     const dayMap = new Map<string, { debit: number; credit: number }>()
 
-    for (const t of transactions) {
+    for (const t of monthTransactions) {
       const isDebit = t.type === 'debit'
-      const amt = Math.abs(t.amount || 0)
+      const amt = Math.abs(t.amount ?? 0)
       const date = new Date(t.date)
-      const dayKey = format(date, 'MMM d')
+      const dayKey = format(date, 'd')  // just day number within month
 
       if (isDebit) {
         totalDebit += amt
-        if (date >= monthStart) thisMonthDebit += amt
         catMap.set(t.category, (catMap.get(t.category) ?? 0) + amt)
       } else {
         totalCredit += amt
@@ -143,47 +179,43 @@ export default function Finance() {
         color: colorFor(name, i), fill: colorFor(name, i),
       }))
 
-    // Sort days chronologically by parsing them relative to this year
+    // Sort by day number
     const chartData = [...dayMap.entries()]
-      .sort((a, b) => {
-        const parse = (s: string) => new Date(`${s} ${now.getFullYear()}`).getTime()
-        return parse(a[0]) - parse(b[0])
-      })
+      .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
       .map(([day, v]) => ({ day, ...v }))
 
-    const categories = ['all', ...new Set(transactions.map(t => t.category).filter(Boolean))]
+    const categories = ['all', ...new Set(monthTransactions.map(t => t.category).filter(Boolean))]
 
     return {
       byCategory, chartData, categories,
-      stats: { totalDebit, totalCredit, thisMonthDebit },
+      stats: { totalDebit, totalCredit },
     }
-  }, [transactions])
+  }, [monthTransactions])
 
   // ── Category filter also changes chart ────────────────────────────────────
   const filteredChartData = useMemo(() => {
     if (filterCat === 'all' || chartMode === 'pie') return chartData
 
-    // Re-compute dayMap for selected category only
+    // Re-compute dayMap for selected category only within selected month
     const dayMap = new Map<string, { debit: number; credit: number }>()
-    for (const t of transactions) {
+    for (const t of monthTransactions) {
       if (t.category !== filterCat) continue
       const isDebit = t.type === 'debit'
-      const amt = Math.abs(t.amount || 0)
-      const dayKey = format(new Date(t.date), 'MMM d')
+      const amt = Math.abs(t.amount ?? 0)
+      const dayKey = format(new Date(t.date), 'd')
       const entry = dayMap.get(dayKey) ?? { debit: 0, credit: 0 }
       if (isDebit) entry.debit += amt
       else entry.credit += amt
       dayMap.set(dayKey, entry)
     }
-    const now = new Date()
     return [...dayMap.entries()]
-      .sort((a, b) => new Date(`${a[0]} ${now.getFullYear()}`).getTime() - new Date(`${b[0]} ${now.getFullYear()}`).getTime())
+      .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
       .map(([day, v]) => ({ day, ...v }))
-  }, [chartData, filterCat, transactions, chartMode])
+  }, [chartData, filterCat, monthTransactions, chartMode])
 
   // ── Filtered transactions ─────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    return transactions.filter(t => {
+    return monthTransactions.filter(t => {
       if (filterCat !== 'all' && t.category !== filterCat) return false
       if (filterType !== 'all' && t.type !== filterType) return false
       if (search) {
@@ -194,7 +226,7 @@ export default function Finance() {
       }
       return true
     })
-  }, [transactions, filterCat, filterType, search])
+  }, [monthTransactions, filterCat, filterType, search])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -220,8 +252,31 @@ export default function Finance() {
   if (isLoading) return <PageLoader />
   if (!transactions.length) return <EmptyState icon={DollarSign} title="No transactions" description="Transactions will appear here once emails are synced" />
 
+  const selectedMonthLabel = availableMonths.length
+    ? format(new Date(selectedMonth + '-01'), 'MMMM yyyy')
+    : ''
+
   return (
     <div className={`${styles.page} fade-in`}>
+
+      {/* ── Month Selector ── */}
+      <div className={styles.monthSelector}>
+        <div className={styles.monthLabel}>
+          <CalendarDays size={15} style={{ color: 'var(--accent)' }} />
+          <span>Month</span>
+        </div>
+        <div className={styles.monthTabs}>
+          {availableMonths.map(m => (
+            <button
+              key={m}
+              className={`${styles.monthTab} ${selectedMonth === m ? styles.activeMonthTab : ''}`}
+              onClick={() => { setSelectedMonth(m); setPage(1); setFilterCat('all'); setFilterType('all'); setSearch('') }}
+            >
+              {format(new Date(m + '-01'), 'MMM yy')}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* ── Upcoming Bill Reminders ── */}
       {upcomingBills.length > 0 && (
@@ -256,9 +311,9 @@ export default function Finance() {
 
       {/* ── Stat Cards ── */}
       <div className={styles.statRow}>
-        <StatCard label="Total Spent" value={stats?.totalDebit ?? 0} icon={TrendingDown} color="var(--error)" />
-        <StatCard label="Total Received" value={stats?.totalCredit ?? 0} icon={TrendingUp} color="var(--success)" />
-        <StatCard label="This Month" value={stats?.thisMonthDebit ?? 0} icon={ArrowDownCircle} color="var(--accent)" />
+        <StatCard label="Total Spent" value={stats?.totalDebit ?? 0} sub={selectedMonthLabel} icon={TrendingDown} color="var(--error)" />
+        <StatCard label="Total Received" value={stats?.totalCredit ?? 0} sub={selectedMonthLabel} icon={TrendingUp} color="var(--success)" />
+        <StatCard label="Transactions" value={monthTransactions.length} sub={`in ${selectedMonthLabel}`} icon={ArrowDownCircle} color="var(--accent)" isCount />
         <StatCard
           label="Net"
           value={Math.abs((stats?.totalCredit ?? 0) - (stats?.totalDebit ?? 0))}
@@ -315,7 +370,7 @@ export default function Finance() {
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                     <XAxis dataKey="day" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false}
-                      width={55} tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`} />
+                      width={55} tickFormatter={v => v == null ? '' : v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`} />
                     <Tooltip content={<ChartTooltip />} />
                     <Area type="monotone" dataKey="debit" name="Spent" stroke="var(--error)" fill="url(#gDebit)" strokeWidth={2} dot={false} />
                     <Area type="monotone" dataKey="credit" name="Received" stroke="var(--success)" fill="url(#gCredit)" strokeWidth={2} dot={false} />
@@ -325,7 +380,7 @@ export default function Finance() {
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                     <XAxis dataKey="day" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false}
-                      width={55} tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`} />
+                      width={55} tickFormatter={v => v == null ? '' : v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`} />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-3)' }} />
                     <Bar dataKey="debit" name="Spent" fill="var(--error)" radius={[4,4,0,0]} />
                     <Bar dataKey="credit" name="Received" fill="var(--success)" radius={[4,4,0,0]} />
@@ -426,11 +481,11 @@ export default function Finance() {
                 <div className={`${styles.amount} ${isDebit ? styles.debit : styles.credit}`}>
                   {isUnknown
                     ? <span style={{ color:'var(--text-muted)', fontSize:11 }}>unknown</span>
-                    : <>{isDebit ? '−' : '+'}₹{Number(Math.abs(tx.amount)).toLocaleString('en-IN',{maximumFractionDigits:0})}</>
+                    : <>{isDebit ? '−' : '+'}₹{Number(Math.abs(tx.amount ?? 0)).toLocaleString('en-IN',{maximumFractionDigits:0})}</>
                   }
                 </div>
                 <div className={styles.date}>
-                  {format(new Date(tx.date), 'MMM d')}
+                  {tx.date ? format(new Date(tx.date), 'MMM d') : '—'}
                 </div>
               </div>
             )

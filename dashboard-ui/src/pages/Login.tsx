@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, LogIn, UserPlus, Zap, User, Lock, Mail } from 'lucide-react'
 import styles from './Login.module.css'
 
@@ -7,6 +8,10 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin }: LoginProps) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as any)?.from || '/'
+
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -52,9 +57,11 @@ export default function Login({ onLogin }: LoginProps) {
       const data = await res.json()
 
       if (data.ok && data.token) {
+        const user = data.user?.username || username
         localStorage.setItem('aura_token', data.token)
-        localStorage.setItem('aura_user', data.user?.username || username)
-        onLogin(data.token, data.user?.username || username)
+        localStorage.setItem('aura_user', user)
+        onLogin(data.token, user)
+        navigate(from, { replace: true })
       } else {
         setError(data.error || 'Something went wrong')
       }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Overview from './pages/Overview';
 import Emails from './pages/Emails';
@@ -19,31 +20,52 @@ export default function App() {
   useEffect(() => {
     if (!token) { setChecking(false); return }
     fetch('/api/auth/check', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : null)
       .then(d => {
-        if (!d.ok) { localStorage.removeItem('aura_token'); setToken(null) }
-        // First run — show register
-        if (d.needsSetup) { localStorage.removeItem('aura_token'); setToken(null) }
+        if (!d?.ok || d?.needsSetup) {
+          localStorage.removeItem('aura_token')
+          localStorage.removeItem('aura_user')
+          setToken(null)
+        }
       })
       .catch(() => { localStorage.removeItem('aura_token'); setToken(null) })
       .finally(() => setChecking(false))
   }, [token])
 
+  const handleLogin = (tok: string, _user: string) => setToken(tok)
+
+  // Loading spinner while verifying token
   if (checking) {
     return (
-      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--bg)' }}>
-        <div style={{ width:32, height:32, borderRadius:'50%', border:'2px solid var(--border)', borderTopColor:'var(--accent)', animation:'spin 0.7s linear infinite' }} />
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: 'var(--bg)'
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%',
+          border: '2px solid var(--border)', borderTopColor: 'var(--accent)',
+          animation: 'spin 0.7s linear infinite'
+        }} />
       </div>
     )
   }
 
-  if (!token) {
-    return <Login onLogin={(tok, _user) => setToken(tok)} />
-  }
-
   return (
     <Routes>
-      <Route element={<Layout />}>
+      {/* Public route */}
+      <Route
+        path="/login"
+        element={token ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />}
+      />
+
+      {/* Protected routes — all wrapped in Layout */}
+      <Route
+        element={
+          <ProtectedRoute token={token}>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
         <Route path="/" element={<Overview />} />
         <Route path="/emails" element={<Emails />} />
         <Route path="/finance" element={<Finance />} />
@@ -54,6 +76,9 @@ export default function App() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
+
+      {/* Catch-all: redirect to home (protected) or login */}
+      <Route path="*" element={<Navigate to={token ? '/' : '/login'} replace />} />
     </Routes>
-  );
+  )
 }

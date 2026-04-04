@@ -1,4 +1,5 @@
 import type { AuraPlugin, PluginContext } from '../core/plugin-bus.js';
+import type { AlertRegistry } from '../core/alerts.js';
 
 // ─── IMAP / Gmail Config ────────────────────────────────────────────────────
 
@@ -134,12 +135,17 @@ export class EmailPlugin implements AuraPlugin {
 
   private ctx!: PluginContext;
   private config!: EmailConfig;
+  private alertRegistry: AlertRegistry | null = null;
 
   /** Token cache keyed by accountId */
   private tokenCache = new Map<string, TokenCache>();
 
   /** Schedule handles keyed by accountId */
   private scheduleHandles = new Map<string, string>();
+
+  setAlertRegistry(registry: AlertRegistry): void {
+    this.alertRegistry = registry;
+  }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -1009,28 +1015,29 @@ Rules:
     const bills = classified.filter(e => e.category === 'bill');
     const actions = classified.filter(e => e.category === 'action_required');
 
-    if (bills.length > 0) {
-      const billSummary = bills
-        .map(b => {
-          const data = b.extractedData as BillData | undefined;
-          const amount = data?.amount ? ` — ${data.currency} ${data.amount}` : '';
-          return `  💰 ${b.fromName}: ${b.subject}${amount}`;
-        })
-        .join('\n');
-      await this.ctx.notify(
-        `📧 *New Bills* [${account.label}]\n${billSummary}`,
-        { urgency: 'high' }
-      );
+    // Alert per-email with dedup (24h cooldown per message)
+    for (const bill of bills) {
+      const key = `email:${bill.id}:bill`;
+      const shouldSend = this.alertRegistry ? this.alertRegistry.shouldFire(key, 24 * 60 * 60 * 1000) : true;
+      if (shouldSend) {
+        const data = bill.extractedData as BillData | undefined;
+        const amount = data?.amount ? ` — ${data.currency} ${data.amount}` : '';
+        await this.ctx.notify(
+          `📧 Bill from <b>${bill.fromName}</b>: ${bill.subject}${amount}`,
+          { urgency: 'high' }
+        );
+      }
     }
 
-    if (actions.length > 0) {
-      const actionSummary = actions
-        .map(a => `  ⚡ ${a.fromName}: ${a.subject}`)
-        .join('\n');
-      await this.ctx.notify(
-        `📧 *Action Required* [${account.label}]\n${actionSummary}`,
-        { urgency: 'high' }
-      );
+    for (const action of actions) {
+      const key = `email:${action.id}:action`;
+      const shouldSend = this.alertRegistry ? this.alertRegistry.shouldFire(key, 24 * 60 * 60 * 1000) : true;
+      if (shouldSend) {
+        await this.ctx.notify(
+          `⚡ Action required from <b>${action.fromName}</b>: ${action.subject}`,
+          { urgency: 'high' }
+        );
+      }
     }
 
     this.ctx.storage.set('email-state', stateKey, { timestamp: new Date().toISOString() });

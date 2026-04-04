@@ -1,4 +1,5 @@
 import type { AuraPlugin, PluginContext } from '../core/plugin-bus.js';
+import type { AlertRegistry } from '../core/alerts.js';
 
 interface CalendarEvent {
   id: string;
@@ -29,6 +30,11 @@ export class CalendarPlugin implements AuraPlugin {
   private config!: CalendarConfig;
   private accessToken: string | null = null;
   private tokenExpiry = 0;
+  private alertRegistry: AlertRegistry | null = null;
+
+  setAlertRegistry(registry: AlertRegistry): void {
+    this.alertRegistry = registry;
+  }
 
   async onLoad(ctx: PluginContext): Promise<void> {
     this.ctx = ctx;
@@ -196,8 +202,39 @@ export class CalendarPlugin implements AuraPlugin {
       }
       this.ctx.emit('synced', { count: events.length });
       this.ctx.logger.debug(`Calendar synced: ${events.length} events`);
+
+      // Check for events starting in next 30 minutes
+      await this.checkUpcomingReminders(events);
     } catch (err) {
       this.ctx.logger.error(`Calendar sync failed: ${err}`);
+    }
+  }
+
+  private async checkUpcomingReminders(events: CalendarEvent[]): Promise<void> {
+    const now = Date.now();
+    const thirtyMin = 30 * 60 * 1000;
+    const twentyFiveMin = 25 * 60 * 1000;
+
+    for (const event of events) {
+      if (event.allDay) continue;
+      const start = new Date(event.start).getTime();
+      const timeUntil = start - now;
+
+      if (timeUntil > 0 && timeUntil <= thirtyMin) {
+        const key = `cal:${event.id}:30min`;
+        const shouldSend = this.alertRegistry
+          ? this.alertRegistry.shouldFire(key, twentyFiveMin)
+          : true;
+
+        if (shouldSend) {
+          const minUntil = Math.round(timeUntil / 60000);
+          const loc = event.location ? ` 📍 ${event.location}` : '';
+          await this.ctx.notify(
+            `📅 Starting in ${minUntil}min: <b>${event.summary}</b>${loc}`,
+            { urgency: 'high' }
+          );
+        }
+      }
     }
   }
 

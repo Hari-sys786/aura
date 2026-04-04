@@ -1,4 +1,5 @@
 import type { AuraPlugin, PluginContext } from '../core/plugin-bus.js';
+import type { AlertRegistry } from '../core/alerts.js';
 
 export interface Subscription {
   id: string;
@@ -19,6 +20,11 @@ export class SubscriptionPlugin implements AuraPlugin {
   name = 'subscriptions';
   version = '0.3.0';
   private ctx!: PluginContext;
+  private alertRegistry: AlertRegistry | null = null;
+
+  setAlertRegistry(registry: AlertRegistry): void {
+    this.alertRegistry = registry;
+  }
 
   async onLoad(ctx: PluginContext): Promise<void> {
     this.ctx = ctx;
@@ -180,8 +186,6 @@ export class SubscriptionPlugin implements AuraPlugin {
   async checkUpcomingRenewals(): Promise<void> {
     const subs = this.listSubscriptions({ status: 'active' });
     const now = new Date();
-    const threeDays = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-    const alerts: string[] = [];
 
     for (const sub of subs) {
       if (!sub.nextRenewal) continue;
@@ -193,19 +197,23 @@ export class SubscriptionPlugin implements AuraPlugin {
         const daysUntil = Math.ceil((renewal.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
         if (daysUntil <= 0) {
-          alerts.push(`🔄 <b>${sub.name}</b> — renewed today (${sub.currency} ${sub.amount})`);
+          const key = `sub:${sub.id}:renewed:${now.toISOString().slice(0, 10)}`;
+          const shouldSend = this.alertRegistry ? this.alertRegistry.shouldFire(key, 20 * 60 * 60 * 1000) : true;
+          if (shouldSend) {
+            await this.ctx.notify(`🔄 <b>${sub.name}</b> renewed today — ${sub.currency} ${sub.amount}`, { urgency: 'normal' });
+          }
           // Advance next renewal
           sub.nextRenewal = this.advanceRenewal(renewal, sub.frequency);
           sub.lastCharge = now.toISOString();
           this.ctx.storage.set('subscriptions', sub.id, sub);
         } else if (daysUntil <= 3) {
-          alerts.push(`⏰ <b>${sub.name}</b> — renews in ${daysUntil} day(s) (${sub.currency} ${sub.amount})`);
+          const key = `sub:${sub.id}:renewal:${now.toISOString().slice(0, 10)}`;
+          const shouldSend = this.alertRegistry ? this.alertRegistry.shouldFire(key, 20 * 60 * 60 * 1000) : true;
+          if (shouldSend) {
+            await this.ctx.notify(`🔔 Renewal in ${daysUntil} day(s): <b>${sub.name}</b> — ${sub.currency} ${sub.amount}`, { urgency: daysUntil <= 1 ? 'high' : 'normal' });
+          }
         }
       } catch { /* skip */ }
-    }
-
-    if (alerts.length > 0) {
-      await this.ctx.notify(`🔔 <b>Subscription Renewals</b>\n\n${alerts.join('\n')}`);
     }
   }
 

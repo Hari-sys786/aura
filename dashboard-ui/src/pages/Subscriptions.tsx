@@ -21,7 +21,7 @@ function toMonthly(amount: number, frequency: string) {
 export default function Subscriptions() {
   const { data: subs, isLoading } = useQuery({
     queryKey: ['subscriptions'],
-    queryFn: api.subscriptions,
+    queryFn: async () => { try { const d = await api.subscriptions(); return Array.isArray(d) ? d : []; } catch { return []; } },
   })
 
   const { monthlyTotal, yearlyTotal, byCost } = useMemo(() => {
@@ -53,7 +53,7 @@ export default function Subscriptions() {
         <div className={styles.section}>
           <div className={styles.sectionHead}>
             <span className={styles.sectionTitle}>Active Subscriptions</span>
-            <span className={styles.totalBadge}>{monthlyTotal.toFixed(2)}/mo</span>
+            <span className={styles.totalBadge}>{(monthlyTotal ?? 0).toFixed(2)}/mo</span>
           </div>
           <div className={styles.subList}>
             {byCost.map(sub => (
@@ -69,7 +69,7 @@ export default function Subscriptions() {
                   </div>
                 </div>
                 <div className={styles.subRight}>
-                  <div className={styles.subAmount}>{sub.currency} {sub.amount.toFixed(2)}</div>
+                  <div className={styles.subAmount}>{sub.currency} {(sub.amount ?? 0).toFixed(2)}</div>
                   <div className={styles.subRenewal}>
                     {sub.nextRenewal ? `Renews ${format(new Date(sub.nextRenewal), 'MMM d')}` : 'No renewal'}
                   </div>
@@ -88,11 +88,11 @@ export default function Subscriptions() {
             <div className={styles.summaryInner}>
               <div className={styles.summaryRow}>
                 <span className={styles.summaryLabel}>Monthly Total</span>
-                <span className={styles.summaryVal}>{monthlyTotal.toFixed(2)}</span>
+                <span className={styles.summaryVal}>{(monthlyTotal ?? 0).toFixed(2)}</span>
               </div>
               <div className={styles.summaryRow}>
                 <span className={styles.summaryLabel}>Yearly Total</span>
-                <span className={styles.summaryVal}>{yearlyTotal.toFixed(2)}</span>
+                <span className={styles.summaryVal}>{(yearlyTotal ?? 0).toFixed(2)}</span>
               </div>
               <div className={styles.summaryRow}>
                 <span className={styles.summaryLabel}>Active</span>
@@ -112,7 +112,7 @@ export default function Subscriptions() {
                         }}
                       />
                     </div>
-                    <span className={styles.costBarAmt}>{sub.monthly.toFixed(0)}/mo</span>
+                    <span className={styles.costBarAmt}>{(sub.monthly ?? 0).toFixed(0)}/mo</span>
                   </div>
                 ))}
               </div>
@@ -135,7 +135,7 @@ export default function Subscriptions() {
                     <span className={styles.timelineDate} style={urgent ? { color: 'var(--error)' } : {}}>
                       {days === 0 ? 'Today' : days < 0 ? 'Overdue' : `${days}d`}
                     </span>
-                    <span className={styles.timelineAmt}>{sub.amount.toFixed(0)}</span>
+                    <span className={styles.timelineAmt}>{(sub.amount ?? 0).toFixed(0)}</span>
                   </div>
                 )
               })}

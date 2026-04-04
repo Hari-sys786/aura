@@ -128,7 +128,7 @@ Be concise. Answer with actual data, not instructions.`;
   /**
    * Detect user intent and fetch relevant data from plugins.
    */
-  private async fetchPluginData(message: string): Promise<string | null> {
+  async fetchPluginData(message: string): Promise<string | null> {
     const msg = message.toLowerCase();
     const parts: string[] = [];
 
@@ -265,8 +265,10 @@ Be concise. Answer with actual data, not instructions.`;
       parts.push(`\nActive plugins: ${activePlugins.map(p => p.name).join(', ')}`);
     }
 
-    // Add any additional context
-    if (context) {
+    // Add channel-specific instructions
+    if (context?.channel === 'alexa') {
+      parts.push(`\nIMPORTANT: This is a voice response for Alexa. Keep it SHORT (under 3 sentences). No markdown, no bullet lists, no special characters. Speak naturally as if talking to someone. Numbers should be spoken plainly (say "eight thousand three hundred" not "₹8,345.45"). Summarize, don't itemize.`);
+    } else if (context) {
       parts.push(`\nContext: ${JSON.stringify(context)}`);
     }
 

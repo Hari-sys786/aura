@@ -1,4 +1,5 @@
 import type { AuraPlugin, PluginContext } from '../core/plugin-bus.js';
+import type { AlertRegistry } from '../core/alerts.js';
 
 export interface Transaction {
   id: string;
@@ -52,6 +53,11 @@ export class FinancePlugin implements AuraPlugin {
   private ctx!: PluginContext;
   private config!: FinanceConfig;
   private scheduleHandles: string[] = [];
+  private alertRegistry: AlertRegistry | null = null;
+
+  setAlertRegistry(registry: AlertRegistry): void {
+    this.alertRegistry = registry;
+  }
 
   async onLoad(ctx: PluginContext): Promise<void> {
     this.ctx = ctx;
@@ -275,7 +281,7 @@ export class FinancePlugin implements AuraPlugin {
 
   async checkBudgets(): Promise<void> {
     const budgets = this.ctx.storage.sqlite.list('budgets');
-    const alerts: string[] = [];
+    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
 
     for (const row of budgets) {
       const budget = JSON.parse(row.value) as Budget;
@@ -283,15 +289,22 @@ export class FinancePlugin implements AuraPlugin {
       const spent = this.getSpentInPeriod(budget.category, budget.period);
       const percentage = (spent / budget.limit) * 100;
 
+      let alertMsg: string | null = null;
       if (percentage >= 100) {
-        alerts.push(`🚨 <b>${budget.category}</b>: Over budget! ₹${spent.toFixed(0)} / ₹${budget.limit} (${percentage.toFixed(0)}%)`);
+        alertMsg = `🚨 Budget exceeded: <b>${budget.category}</b> — ₹${spent.toFixed(0)} / ₹${budget.limit} (${percentage.toFixed(0)}%)`;
       } else if (percentage >= this.config.alertThreshold) {
-        alerts.push(`⚠️ <b>${budget.category}</b>: ₹${spent.toFixed(0)} / ₹${budget.limit} (${percentage.toFixed(0)}%)`);
+        alertMsg = `⚠️ Budget alert: <b>${budget.category}</b> at ${percentage.toFixed(0)}% — ₹${spent.toFixed(0)} / ₹${budget.limit}`;
       }
-    }
 
-    if (alerts.length > 0) {
-      await this.ctx.notify(`💰 <b>Budget Alert</b>\n\n${alerts.join('\n')}`);
+      if (alertMsg) {
+        const key = `budget:${budget.category}:${month}:${Math.floor(percentage / 10) * 10}`;
+        const shouldSend = this.alertRegistry
+          ? this.alertRegistry.shouldFire(key, 6 * 60 * 60 * 1000)
+          : true;
+        if (shouldSend) {
+          await this.ctx.notify(alertMsg, { urgency: percentage >= 100 ? 'critical' : 'high' });
+        }
+      }
     }
   }
 

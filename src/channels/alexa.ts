@@ -1,5 +1,5 @@
-import http from 'http';
 import type { Agent } from '../core/agent.js';
+import type { AiAdapter, ChatMessage } from '../core/ai/adapter.js';
 import type { Logger } from '../core/logger.js';
 
 interface AlexaRequest {
@@ -22,13 +22,23 @@ interface AlexaResponse {
   };
 }
 
+const ALEXA_SYSTEM_PROMPT = `You are Aura, a personal AI life manager. You are speaking through Alexa.
+RULES:
+- Keep responses under 3 sentences. Be concise and natural.
+- No markdown, no bullet points, no special characters, no asterisks.
+- Say numbers in words when speaking amounts (say "eight thousand rupees" not "₹8,000").
+- Summarize, don't itemize. Give the key takeaway first.
+- Sound warm and helpful, like a trusted assistant.`;
+
 export class AlexaChannel {
   private agent: Agent;
+  private fastAi: AiAdapter | null;
   private log: Logger;
   private skillId: string;
 
-  constructor(agent: Agent, logger: Logger, skillId?: string) {
+  constructor(agent: Agent, logger: Logger, fastAi?: AiAdapter, skillId?: string) {
     this.agent = agent;
+    this.fastAi = fastAi ?? null;
     this.log = logger;
     this.skillId = skillId ?? '';
   }
@@ -36,7 +46,6 @@ export class AlexaChannel {
   async handleRequest(body: string): Promise<AlexaResponse> {
     const req = JSON.parse(body) as AlexaRequest;
 
-    // Verify skill ID if configured
     if (this.skillId && req.session.application.applicationId !== this.skillId) {
       this.log.warn(`Alexa: invalid skill ID ${req.session.application.applicationId}`);
       return this.respond('Unauthorized.', true);
@@ -45,7 +54,7 @@ export class AlexaChannel {
     switch (req.request.type) {
       case 'LaunchRequest':
         return this.respond(
-          'Welcome to Aura, your personal life manager. You can ask me about your schedule, emails, spending, or anything else. What would you like to know?',
+          'Welcome to Aura, your personal life manager. You can ask me about your schedule, emails, spending, or just chat. What would you like to know?',
           false,
           'Aura',
           'Try saying: What\'s on my schedule today?'
@@ -65,6 +74,65 @@ export class AlexaChannel {
     }
   }
 
+  /**
+   * Get AI response — uses fast adapter if available, falls back to agent.
+   * Fast adapter path: direct AI call with Alexa system prompt (2-4s).
+   * Agent path: full plugin data enrichment + AI (may be 5-15s).
+   */
+  private async getResponse(query: string): Promise<string> {
+    // Path 1: Fast AI adapter (dedicated small model for Alexa)
+    if (this.fastAi) {
+      try {
+        // Get plugin data from agent for context enrichment
+        const pluginData = await this.getPluginData(query);
+        const userContent = pluginData
+          ? `${query}\n\n[Data]\n${pluginData}`
+          : query;
+
+        const messages: ChatMessage[] = [
+          { role: 'system', content: ALEXA_SYSTEM_PROMPT },
+          { role: 'user', content: userContent },
+        ];
+
+        const result = await Promise.race([
+          this.fastAi.chat(messages, { maxTokens: 200, temperature: 0.3 }),
+          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 7000)),
+        ]);
+
+        return this.stripMarkdown(result.content);
+      } catch (e: any) {
+        this.log.warn(`Alexa fast AI failed: ${e.message}, falling back to agent`);
+      }
+    }
+
+    // Path 2: Full agent (slower but richer)
+    try {
+      const result = await Promise.race([
+        this.agent.processMessage(query, { channel: 'alexa' }),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 7000)),
+      ]);
+      return this.stripMarkdown(result);
+    } catch (e: any) {
+      if (e.message === 'timeout') {
+        return 'I\'m still working on that. Try asking again in a moment.';
+      }
+      throw e;
+    }
+  }
+
+  /** Fetch fresh plugin data (emails, calendar, finance) with timeout */
+  private async getPluginData(query: string): Promise<string | null> {
+    try {
+      const data = await Promise.race([
+        this.agent.fetchPluginData(query),
+        new Promise<null>((res) => setTimeout(() => res(null), 4000)),
+      ]);
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
   private async handleIntent(intent: string, slots?: Record<string, { value?: string }>): Promise<AlexaResponse> {
     this.log.info(`Alexa intent: ${intent}`);
 
@@ -75,35 +143,41 @@ export class AlexaChannel {
         if (!query) {
           return this.respond('What would you like to know?', false, undefined, undefined, true);
         }
-        const response = await this.agent.processMessage(query, { channel: 'alexa' });
-        // Truncate for speech (Alexa has 8000 char limit for SSML)
-        const speech = response.slice(0, 1000);
-        return this.respond(speech, false, 'Aura', response.slice(0, 500));
+        const response = await this.getResponse(query);
+        return this.respond(response.slice(0, 1000), false, 'Aura', response.slice(0, 500));
       }
 
       case 'ScheduleIntent': {
-        const response = await this.agent.processMessage('What\'s on my calendar today?', { channel: 'alexa' });
+        const response = await this.getResponse('What\'s on my calendar today?');
         return this.respond(response.slice(0, 1000), false, 'Today\'s Schedule');
       }
 
       case 'EmailIntent': {
-        const response = await this.agent.processMessage('Show my recent emails', { channel: 'alexa' });
+        const response = await this.getResponse('Summarize my recent emails briefly');
         return this.respond(response.slice(0, 1000), false, 'Emails');
       }
 
       case 'SpendingIntent': {
-        const response = await this.agent.processMessage('How much did I spend today?', { channel: 'alexa' });
+        const response = await this.getResponse('How much did I spend today? Summarize briefly.');
         return this.respond(response.slice(0, 1000), false, 'Spending');
       }
 
       case 'BriefingIntent': {
-        const response = await this.agent.processMessage('Give me my morning briefing', { channel: 'alexa' });
+        const response = await this.getResponse('Give me a brief daily update');
         return this.respond(response.slice(0, 1000), false, 'Briefing');
       }
 
+      case 'GreetingIntent': {
+        const response = await this.getResponse('Hey! How are you doing?');
+        return this.respond(response.slice(0, 1000), false, undefined, undefined, true);
+      }
+
+      case 'GoodbyeIntent':
+        return this.respond('See you later! Just say "Alexa, open Aura" whenever you need me.', true);
+
       case 'AMAZON.HelpIntent':
         return this.respond(
-          'I can help with your schedule, emails, spending, and more. Try saying: What\'s on my calendar? Or: How much did I spend today?',
+          'I can help with your schedule, emails, spending, and more. You can also just chat with me about anything. What would you like to know?',
           false
         );
 
@@ -112,21 +186,38 @@ export class AlexaChannel {
         return this.respond('Goodbye!', true);
 
       case 'AMAZON.FallbackIntent':
-        return this.respond('I\'m not sure about that. Try asking about your schedule, emails, or spending.', false);
+        return this.respond('I\'m not sure about that. Try asking about your schedule, emails, or spending. Or just chat with me!', false, undefined, undefined, true);
 
       default: {
-        // Try processing as general query
-        const response = await this.agent.processMessage(intent, { channel: 'alexa' });
+        const response = await this.getResponse(intent);
         return this.respond(response.slice(0, 1000), false);
       }
     }
   }
 
+  /** Strip markdown for speech — Alexa speaks plain text only */
+  private stripMarkdown(text: string): string {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/__(.+?)__/g, '$1')
+      .replace(/_(.+?)_/g, '$1')
+      .replace(/~~(.+?)~~/g, '$1')
+      .replace(/`(.+?)`/g, '$1')
+      .replace(/^#+\s*/gm, '')
+      .replace(/^\*\s+/gm, '')
+      .replace(/^-\s+/gm, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   private respond(text: string, endSession: boolean, cardTitle?: string, cardContent?: string, reprompt?: boolean): AlexaResponse {
+    const cleanText = text ? this.stripMarkdown(text) : '';
     const response: AlexaResponse = {
       version: '1.0',
       response: {
-        outputSpeech: text ? { type: 'PlainText', text } : undefined,
+        outputSpeech: cleanText ? { type: 'PlainText', text: cleanText } : undefined,
         shouldEndSession: endSession,
       },
     };
@@ -135,7 +226,7 @@ export class AlexaChannel {
       response.response.card = {
         type: 'Simple',
         title: cardTitle,
-        content: cardContent ?? text,
+        content: cardContent ?? cleanText,
       };
     }
 

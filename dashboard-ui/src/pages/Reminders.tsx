@@ -53,8 +53,11 @@ export default function Reminders() {
   const { data: bills = [], isLoading } = useQuery({
     queryKey: ['bills'],
     queryFn: async () => {
-      const r = await fetch('/api/bills')
-      return r.json() as Promise<Bill[]>
+      const token = localStorage.getItem('aura_token') || ''
+      const r = await fetch('/api/bills', { headers: { Authorization: `Bearer ${token}` } })
+      if (!r.ok) return []
+      const data = await r.json()
+      return Array.isArray(data) ? data as Bill[] : []
     },
   })
 
@@ -193,7 +196,7 @@ export default function Reminders() {
                   </div>
                   <div className={styles.billSub}>{b.billType} · Detected from email</div>
                   {b.minimumDue && b.minimumDue < b.amount && (
-                    <div className={styles.billNote}>Min due: ₹{b.minimumDue.toLocaleString('en-IN')}</div>
+                    <div className={styles.billNote}>Min due: ₹{(b.minimumDue ?? 0).toLocaleString('en-IN')}</div>
                   )}
                 </div>
                 <div className={styles.billMeta}>
