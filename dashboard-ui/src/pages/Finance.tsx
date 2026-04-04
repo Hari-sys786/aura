@@ -33,13 +33,16 @@ const colorFor = (cat: string, idx: number) =>
 
 const PAGE_SIZE = 20
 
-/** Detect payment method from transaction description */
+/** Detect payment method from transaction data */
 function detectPaymentMethod(tx: any): string {
-  const d = ((tx.description || '') + ' ' + (tx.merchant || '') + ' ' + (tx.source || '')).toLowerCase()
+  // Use stored paymentMethod if available (parsed from email body)
+  if (tx.paymentMethod) return tx.paymentMethod
+  const d = ((tx.description || '') + ' ' + (tx.merchant || '') + ' ' + (tx.source || '') + ' ' + (tx.merchantDetail || '')).toLowerCase()
+  if (d.includes('credit card') || d.includes('cc *') || d.includes('visa') || d.includes('mastercard') || d.includes('rupay')) return 'Credit Card'
   if (d.includes('upi') || d.includes('gpay') || d.includes('phonepe') || d.includes('paytm')) return 'UPI'
-  if (d.includes('credit card') || d.includes('card') || d.includes('bpcl sbi') || d.includes('visa') || d.includes('mastercard') || d.includes('rupay')) return 'Card'
   if (d.includes('neft') || d.includes('rtgs') || d.includes('imps')) return 'NEFT/IMPS'
   if (d.includes('order') || d.includes('payment link') || d.includes('razorpay') || d.includes('payu')) return 'Online'
+  if (d.includes('bpcl sbi') || d.includes('sbi card')) return 'Credit Card'
   if (d.includes('transfer') || d.includes('a/c') || d.includes('bank') || d.includes('idfc') || d.includes('yes bank') || d.includes('sbi') || d.includes('hdfc')) return 'Bank Transfer'
   return 'Other'
 }
@@ -476,8 +479,8 @@ export default function Finance() {
             <select className={styles.select} value={filterMethod}
               onChange={e => setFilter(() => setFilterMethod(e.target.value))}>
               <option value="all">All methods</option>
+              <option value="Credit Card">Credit Card</option>
               <option value="UPI">UPI</option>
-              <option value="Card">Card</option>
               <option value="NEFT/IMPS">NEFT/IMPS</option>
               <option value="Bank Transfer">Bank Transfer</option>
               <option value="Online">Online</option>
